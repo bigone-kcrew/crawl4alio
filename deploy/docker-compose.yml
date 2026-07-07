@@ -1,0 +1,46 @@
+# crawl4alio 풀스택 (N100급 미니PC 1대 기준)
+#
+# 기동:   cd deploy && docker compose up -d crawl4ai paddleocr
+# 상태:   docker compose run --rm app                       # check_services 실행
+# 수집:   docker compose run --rm app npm run sync:alio
+#         docker compose run --rm app npm run collect:legal
+# 변환:   docker compose run --rm app npm run convert:markdown
+#         docker compose run --rm app npm run convert:ocr
+#
+# 주의: paddleocr 최초 기동 시 모델 다운로드로 첫 요청이 수 분 걸림
+#       (모델은 paddlex-models 볼륨에 영속화되어 재기동 시 즉시 사용)
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+    volumes:
+      - ../data:/app/data
+    env_file:
+      - path: ../.env.api
+        required: false
+    environment:
+      CRAWL4AI_URL: http://crawl4ai:11235/crawl
+      PADDLEOCR_PARSE_URL: http://paddleocr:13430/parse
+    depends_on:
+      - crawl4ai
+      - paddleocr
+
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    shm_size: 1g
+    ports:
+      - "11235:11235"
+    restart: unless-stopped
+
+  paddleocr:
+    build: ./paddleocr-parser
+    ports:
+      - "13430:13430"
+    volumes:
+      - paddlex-models:/root/.paddlex
+    restart: unless-stopped
+
+volumes:
+  paddlex-models:

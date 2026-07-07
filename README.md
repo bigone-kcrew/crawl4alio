@@ -35,35 +35,51 @@
                          기관별 .md 산출물
 ```
 
-`Crawl4AI`, `kordoc`, `markitdown`, `PaddleOCR`은 이 저장소에 포함되지 않은 **외부 서비스**입니다. 각자 Docker 등으로 띄우고 엔드포인트를 `.env.api`에 지정해야 합니다. 자세한 내용은 [docs/CONVERSION.md](docs/CONVERSION.md)를 참고하세요.
+- **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
+- **Crawl4AI**(ALIO 본문 표)와 **PaddleOCR**(스캔 PDF)은 외부 서비스로, 풀스택 프로필의 docker compose에 포함되어 있습니다.
 
-- Crawl4AI: https://github.com/unclecode/crawl4ai (LLM 친화적 웹 크롤러)
-- MarkItDown: https://github.com/microsoft/markitdown (MS의 범용 문서→Markdown 변환기)
-- PaddleOCR: https://github.com/PaddlePaddle/PaddleOCR (OCR 엔진)
-- kordoc: https://github.com/chrisryugj/kordoc (한글(HWP) 계열 문서를 Markdown으로 변환하는 파서 서버)
+## 설치 프로필
+
+| | 최소 프로필 | 풀스택 프로필 (권장, N100급 미니PC~) |
+|---|---|---|
+| 요구사항 | Node 18+ | Node 18+ + Docker |
+| 설치 | `npm install` | `npm install` + `cd deploy && docker compose up -d` |
+| 수집 (ALIO 첨부·법령·내규·통계·동기화) | ✅ | ✅ |
+| HWP/PDF/DOCX/XLS(X) → MD 변환 | ✅ (kordoc 내장) | ✅ |
+| 스캔 PDF OCR (~45% 분량) | ❌ `ocr_needed` 큐 대기 | ✅ PaddleOCR 컨테이너 |
+| ALIO 공시 본문 표 수집 | ❌ 스킵 | ✅ Crawl4AI 컨테이너 |
+| 파서 직접 연결 | [docs/PARSERS.md](docs/PARSERS.md)의 `/parse` 계약 | — |
+
+> **AI 지원 설치**: 이 저장소를 Claude Code 등 AI 코딩 에이전트에 열면 [CLAUDE.md](CLAUDE.md)의 가이드에 따라 환경 진단부터 설치·검증까지 도와줍니다.
 
 ## 빠른 시작
 
 ```bash
 npm install
-cp .env.example .env.api
-# .env.api에 Crawl4AI/kordoc/markitdown/PaddleOCR 엔드포인트, law.go.kr API 키 등을 채운 뒤
+cp .env.example .env.api    # law.go.kr API 키 등 입력
 source .env.api
 
-# 1. ALIO 경영공시 수집 (config/crawl_targets.yaml 기준 항목·연도만)
-npm run collect:alio
+node collection/check_services.js   # 환경 진단 — 활성 기능 확인
 
-# 2. 다운로드된 첨부파일 인덱스 생성
+# (풀스택) 파서 스택 기동
+cd deploy && docker compose up -d && cd ..
+
+# 1. ALIO 경영공시 수집 — 항목·기관 선택 가능
+node collection/download_documents_advanced.js --print-scope          # 수집 범위 미리보기
+node collection/download_documents_advanced.js --categories 노동조합   # 예: 노동조합 관련 항목만
+npm run collect:alio                                                  # yaml 설정 기준
+
+# 2. 파일 인덱스 → Markdown 변환 → (스캔 문서) OCR
 npm run build:file-index
-
-# 3. Markdown 변환 (kordoc → markitdown)
 npm run convert:markdown
-
-# 4. 위에서 OCR 필요로 분류된 스캔 문서 처리
 npm run convert:ocr
+
+# 3. 이후 일상 운영: 증분 동기화
+npm run sync:alio                    # 신규 공시 감지 (리포트)
+node collection/sync_alio.js --mode=apply   # 감지 즉시 자동 수집
 ```
 
-더 자세한 사용법과 각 스크립트의 역할은 [docs/COLLECTION.md](docs/COLLECTION.md), [docs/CONVERSION.md](docs/CONVERSION.md)를 참고하세요.
+더 자세한 사용법은 [docs/COLLECTION.md](docs/COLLECTION.md), [docs/CONVERSION.md](docs/CONVERSION.md), [docs/PARSERS.md](docs/PARSERS.md)를 참고하세요.
 
 ## 폴더 구조
 

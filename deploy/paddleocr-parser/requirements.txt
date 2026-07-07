@@ -1,0 +1,6 @@
+# PaddleOCR은 최신(3.7.0)의 직전 버전으로 고정 (안정성 우선)
+paddlepaddle>=3.0.0
+paddleocr==3.6.0
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

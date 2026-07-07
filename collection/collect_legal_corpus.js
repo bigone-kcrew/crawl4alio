@@ -16,7 +16,7 @@
  * Env (.env.api에서 로드):
  *   CRAWL4AI_API_TOKEN   crawl4ai Bearer 토큰 (law.go.kr 외 필수)
  *   CRAWL4AI_HOST        (default: localhost:11235)
- *   KORDOC_URL           (default: http://localhost:3400/parse)
+ *   KORDOC_URL           (선택 — 미설정 시 내장 kordoc npm 사용)
  *   PADDLEOCR_URL        (default: http://localhost:13430/parse)
  *   LEGAL_MD_ROOT        (default: data/legal-md)
  *   CONCURRENT           동시 수집 수 (default: 3)
@@ -34,7 +34,7 @@ const yaml  = require('js-yaml');
 
 const CRAWL4AI_HOST  = process.env.CRAWL4AI_HOST || 'localhost:11235';
 const CRAWL4AI_TOKEN = (process.env.CRAWL4AI_API_TOKEN || '').trim();
-const KORDOC_URL     = process.env.KORDOC_URL    || 'http://localhost:3400/parse';
+// kordoc은 parsers 어댑터가 처리 (KORDOC_PARSE_URL/KORDOC_URL 설정 시 HTTP, 아니면 내장 npm)
 const PADDLEOCR_URL  = process.env.PADDLEOCR_URL || 'http://localhost:13430/parse';
 const DRF_OC         = (process.env.OPENAPILAWKEY || process.env.LAW_OC || '').trim();
 const MIN_MD_CHARS   = 50;
@@ -530,8 +530,11 @@ async function postMultipart(url, fileBuf, filename, timeoutMs) {
 
 // ── kordoc / PaddleOCR ────────────────────────────────────────────────────────
 
+const parsers = require('./project/crawler/utils/parsers');
+
 async function convertWithKordoc(fileBuf, filename) {
-  const data = await postMultipart(KORDOC_URL, fileBuf, filename, KORDOC_TIMEOUT);
+  // KORDOC_PARSE_URL 설정 시 HTTP, 아니면 내장 kordoc npm (in-process)
+  const data = await parsers.callKordoc(fileBuf, filename, KORDOC_TIMEOUT);
   if (!data.ok) throw new Error(`kordoc 오류: ${JSON.stringify(data.error)}`);
   return data.result?.markdown || data.result?.text || data.markdown || '';
 }

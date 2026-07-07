@@ -11,7 +11,7 @@
  *   node collection/convert_reference_docs.js --only 표준·권장안   # 하위 폴더명 필터
  *
  * 엔드포인트(환경변수로 override):
- *   KORDOC_PARSE_URL     (default http://localhost:3400/parse)
+ *   KORDOC_PARSE_URL     (선택 — 미설정 시 내장 kordoc npm 사용)
  *   PADDLEOCR_PARSE_URL  (default http://localhost:13430/parse)
  *
  * 변환 후 해당 corpus의 인덱스를 재생성하세요.
@@ -20,8 +20,8 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
+const parsers = require('./project/crawler/utils/parsers');
 
-const KORDOC_URL = process.env.KORDOC_PARSE_URL    || 'http://localhost:3400/parse';
 const OCR_URL    = process.env.PADDLEOCR_PARSE_URL || 'http://localhost:13430/parse';
 const EXTS = new Set(['.pdf', '.hwp', '.hwpx', '.hwpml', '.docx', '.xlsx']);
 const MIN_LEN = 100;         // 이보다 짧으면 변환 실패로 간주 → OCR 폴백
@@ -60,11 +60,17 @@ async function callParse(url, absPath, timeout) {
   return (d && (d.result?.markdown || d.markdown)) || (typeof d === 'string' ? d : '') || '';
 }
 
+async function kordocParse(absPath) {
+  const r = await parsers.callKordoc(fs.readFileSync(absPath), path.basename(absPath), KORDOC_TIMEOUT);
+  if (!r.ok) throw new Error(r.error?.message || r.error?.code || 'kordoc 실패');
+  return r.result?.markdown || '';
+}
+
 (async () => {
   if (!fs.existsSync(SRC)) { console.error('SRC 없음:', SRC); process.exit(1); }
   let files = walk(SRC, SRC, []);
   if (ONLY) files = files.filter(f => f.rel.split(path.sep).includes(ONLY) || f.rel.includes(ONLY));
-  console.log(`[CONFIG] kordoc=${KORDOC_URL}  ocr=${OCR_URL}`);
+  console.log(`[CONFIG] kordoc=${parsers.kordocMode() === 'http' ? parsers.KORDOC_HTTP_URL : '내장 npm'}  ocr=${OCR_URL}`);
   console.log(`[SRC] ${SRC}\n[DEST] ${DEST}\n대상 원본: ${files.length}건${DRY ? ' (DRY)' : ''}${FORCE ? ' (FORCE)' : ''}`);
   const stat = { conv: 0, skip: 0, fail: 0 };
   for (const f of files) {
@@ -75,7 +81,7 @@ async function callParse(url, absPath, timeout) {
     const base = path.basename(f.abs);
     if (DRY) { console.log(`  [DRY] ${f.rel} → ${relMd}`); stat.conv++; continue; }
     let md = '', parser = 'kordoc';
-    try { md = await callParse(KORDOC_URL, f.abs, KORDOC_TIMEOUT); } catch (e) { console.log(`  kordoc 실패 ${base}: ${e.message}`); }
+    try { md = await kordocParse(f.abs); } catch (e) { console.log(`  kordoc 실패 ${base}: ${e.message}`); }
     if (!md || md.length < MIN_LEN) {
       try { md = await callParse(OCR_URL, f.abs, OCR_TIMEOUT); parser = 'paddleocr'; } catch (e) { console.log(`  OCR 실패 ${base}: ${e.message}`); }
     }

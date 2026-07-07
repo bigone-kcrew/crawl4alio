@@ -20,12 +20,10 @@
 const fs   = require('fs');
 const path = require('path');
 const axios = require('axios');
-const FormData = require('form-data');
+const parsers = require('./project/crawler/utils/parsers');
 
 // ── 설정 ──────────────────────────────────────────────────────────────────────
 const ALIO_BASE       = 'https://www.alio.go.kr';
-const KORDOC_URL      = process.env.KORDOC_PARSE_URL     || 'http://localhost:3400/parse';
-const MARKITDOWN_URL  = process.env.MARKITDOWN_PARSE_URL || 'http://localhost:3410/parse';
 
 const DATA_DIR   = path.join(__dirname, '..', 'data');
 const RAW_DIR    = path.join(DATA_DIR, 'institution-bylaws-raw');
@@ -154,22 +152,17 @@ async function downloadFile(fileNo, destBase) {
 
 // ── 파서 호출 ─────────────────────────────────────────────────────────────────
 async function callParser(parserName, filePath, filename) {
-  const url = parserName === 'kordoc' ? KORDOC_URL : MARKITDOWN_URL;
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath), filename);
-
-  const res = await axios.post(url, form, {
-    headers: form.getHeaders(),
-    timeout: 120000,
-  });
-  return res.data;
+  const buf = fs.readFileSync(filePath);
+  return parserName === 'kordoc'
+    ? parsers.callKordoc(buf, filename, 120000)
+    : parsers.callMarkitdown(buf, filename, 120000);
 }
 
 async function convertToMd(rawPath, ext) {
-  const parsers = ROUTING[ext] || ['markitdown'];
+  const parserNames = ROUTING[ext] || ['markitdown'];
   const filename = path.basename(rawPath);
 
-  for (const parser of parsers) {
+  for (const parser of parserNames) {
     try {
       const result = await callParser(parser, rawPath, filename);
       const md = result.result?.markdown || result.markdown || '';

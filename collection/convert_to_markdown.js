@@ -43,8 +43,7 @@ console.log = (...args) => {
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
-const KORDOC_URL     = process.env.KORDOC_PARSE_URL     || 'http://localhost:3400/parse';
-const MARKITDOWN_URL = process.env.MARKITDOWN_PARSE_URL || 'http://localhost:3410/parse';
+const parsers = require('./project/crawler/utils/parsers');
 const CONCURRENT       = Math.min(parseInt(process.env.CONCURRENT       || '5'), 10);
 const CONCURRENT_LARGE = Math.min(parseInt(process.env.CONCURRENT_LARGE || '2'), 5);
 const LARGE_BYTES      = parseInt(process.env.LARGE_FILE_MB || '10') * 1024 * 1024;
@@ -56,8 +55,8 @@ const MARKITDOWN_PDF_TIMEOUT_MS = parseInt(process.env.MARKITDOWN_PDF_TIMEOUT_MS
 const MIN_CONTENT_CHARS = 20;
 
 // ── Parser 라우팅 ───────────────────────────────────────────────────────────────
-// kordoc 공식 지원: hwp, hwpx, hwpml, pdf, xlsx, docx
-// xls·pptx는 markitdown 전용
+// kordoc 지원: hwp3/hwp/hwpx/hwpml, pdf, xls/xlsx, docx (npm 내장 or HTTP)
+// markitdown은 MARKITDOWN_PARSE_URL 설정 시에만 폴백으로 사용 (pptx는 markitdown 전용)
 const ROUTING = {
   hwp:   ['kordoc', 'markitdown'],
   hwpx:  ['kordoc', 'markitdown'],
@@ -65,12 +64,10 @@ const ROUTING = {
   pdf:   ['kordoc', 'markitdown'],
   xlsx:  ['kordoc', 'markitdown'],
   docx:  ['kordoc', 'markitdown'],
-  xls:   ['markitdown'],
+  xls:   ['kordoc', 'markitdown'],
   pptx:  ['markitdown'],
 };
 const CONVERTIBLE = new Set(Object.keys(ROUTING));
-
-const PARSER_URL = { kordoc: KORDOC_URL, markitdown: MARKITDOWN_URL };
 
 // 스캔/이미지 PDF 오류 → OCR 필요로 분류 (markitdown 폴백 건너뜀)
 const OCR_ERROR_PATTERNS = [
@@ -172,22 +169,11 @@ async function runPool(items, concurrency, handler) {
 // ── 파서 호출 ──────────────────────────────────────────────────────────────────
 
 async function callParser(parserName, absPath, filename, timeoutMs) {
-  const url = PARSER_URL[parserName];
   const buf = fs.readFileSync(absPath);
-  const form = new FormData();
-  form.append('file', new File([buf], filename));
-
-  const res = await fetch(url, {
-    method: 'POST',
-    body: form,
-    signal: AbortSignal.timeout(timeoutMs ?? REQUEST_TIMEOUT_MS),
-  });
-  // kordoc은 일부 PARSE_FAILED(JBig2 등)에서 HTTP 500을 반환하지만
-  // 응답 본문은 정상 JSON이므로 HTTP 상태 무관하게 파싱
-  return res.json().catch(() => ({
-    ok: false,
-    error: { code: `HTTP_${res.status}`, message: `HTTP ${res.status} from ${parserName}` },
-  }));
+  const timeout = timeoutMs ?? REQUEST_TIMEOUT_MS;
+  return parserName === 'kordoc'
+    ? parsers.callKordoc(buf, filename, timeout)
+    : parsers.callMarkitdown(buf, filename, timeout);
 }
 
 function isOcrError(errObj) {
@@ -344,8 +330,8 @@ async function main() {
   console.log('=== ALIO Markdown Converter ===');
   if (DRY_RUN) console.log('[MODE] DRY RUN');
   if (RESET_CKP) console.log('[MODE] RESET CHECKPOINT');
-  console.log(`[CONFIG] kordoc:      ${KORDOC_URL}`);
-  console.log(`[CONFIG] markitdown:  ${MARKITDOWN_URL}`);
+  console.log(`[CONFIG] kordoc:      ${parsers.kordocMode() === 'http' ? parsers.KORDOC_HTTP_URL : parsers.kordocMode() === 'local' ? '내장 npm (in-process)' : '사용 불가 — npm install 필요'}`);
+  console.log(`[CONFIG] markitdown:  ${parsers.MARKITDOWN_HTTP_URL || '미설정 (폴백 건너뜀)'}`);
   console.log(`[CONFIG] concurrency: normal=${CONCURRENT}, large=${CONCURRENT_LARGE}`);
   console.log(`[CONFIG] large 기준:  ${LARGE_BYTES / 1024 / 1024}MB\n`);
 
