@@ -16,23 +16,18 @@
 
 ## 아키텍처
 
-```
-                         ┌───────────────────┐
-  ALIO 상세페이지  ───▶  │     Crawl4AI      │  (Docker, 별도 배포 필요)
-                         └────────┬──────────┘
-                                  ▼
-                     content.json / content.md / 첨부파일 다운로드
-                                  ▼
-              ┌──────────────────────────────────────┐
-              │  변환 파이프라인 (fallback 체인)       │
-              │  kordoc  ──(실패)──▶  markitdown     │
-              │     │                                │
-              │  (스캔 PDF 등 텍스트 추출 실패)        │
-              │     ▼                                │
-              │  PaddleOCR                           │
-              └──────────────────────────────────────┘
-                                  ▼
-                         기관별 .md 산출물
+```mermaid
+flowchart TD
+    A["ALIO 상세페이지"] --> B["Crawl4AI<br/>(Docker, 별도 배포 필요)"]
+    B --> C["content.json / content.md<br/>첨부파일 다운로드"]
+    C --> D{"변환 파이프라인<br/>(fallback chain)"}
+    D --> E["kordoc<br/>HWP3/5 · HWPX · PDF · XLS(X) · DOCX"]
+    E -->|실패 시| F["markitdown"]
+    F --> G{"스캔 PDF 등<br/>텍스트 추출 실패?"}
+    G -->|예| H["PaddleOCR"]
+    G -->|아니오| I["기관별 .md 산출물"]
+    H --> I
+    E --> I
 ```
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
