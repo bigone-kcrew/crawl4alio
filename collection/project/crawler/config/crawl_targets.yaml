@@ -1,3 +1,17 @@
+# 수집 스코프 모드 (CLI --scope/--categories/--items가 이 설정보다 우선)
+#   items      : 아래 target_items 목록만 수집 (기본, 하위호환)
+#   categories : minor_categories에 나열한 중분류만 수집
+#   all        : 전체 92개 공시항목 수집 (355개 기관 전량이면 장시간 소요 —
+#                --ministry/--apba-ids/--inst-type/--limit로 분할 실행 권장)
+scope: items
+
+# scope: categories 일 때 사용하는 중분류 목록 (data/disclosure_items.json의 minor_category)
+# minor_categories:
+#   - 노동조합
+#   - 인력관리
+#   - 보수관리
+#   - 복리후생
+
 target_items:
   - scd: '10105'
     report_nos: ['10105']

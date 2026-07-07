@@ -1,5 +1,22 @@
 # 수집 방법 (Collection)
 
+## 0. 저장 폴더·파일 명명규칙
+
+모든 산출물은 `data/` 하위에 코퍼스별로 저장되며, 폴더·파일명 규칙은 다음과 같습니다.
+
+| 코퍼스 | 경로 규칙 | 예시 |
+|---|---|---|
+| ALIO 공시 | `data/structured_data/[주무부처]기관명_기관코드/SCD_항목명/연도/` | `[중소벤처기업부]창업진흥원_C0451/21026_노동조합/2024/` |
+| ALIO 공시 파일 | 위 연도 폴더에 `content.json`(메타)·`content.md`(본문)·`attachments.json`·`manifest.json` + 첨부 원본 파일명 | `이사회 회의록.hwp` |
+| 기관 내규 | `data/institution-bylaws-raw/[주무부처]기관명_기관코드/규정명_제개정일.확장자` (md는 `-md` 미러) | `보수규정_20250110.hwp` |
+| 법령 corpus | `data/legal-md/카테고리/법령명(시행일).md` (원본은 `legal-raw` 미러) | `노동법령/근로기준법(2025.10.23. 시행).md` |
+| 통계 | `data/raw/statistics/`(엑셀 원본) → `data/processed/statistics/`(JSON·MD) | |
+
+- 기관 폴더명은 `[부처]기관명_기관코드` — `institutions.json`의 `ministry`/`name`/`apba_id`를 조합 (`disclosure_scope.js`의 `buildStructuredPaths()`).
+- SCD 폴더명은 `공시코드_중분류명` (예: `20801_복리후생`).
+- 파일시스템 예약문자(`/ : * ? " < > |`)는 `_`로 치환됩니다(`sanitizeSegment`).
+- 연도 판정 불가 시 `UnknownYear` 폴더에 저장됩니다.
+
 ## 1. ALIO 경영공시 수집 — `download_documents_advanced.js`
 
 ### 대상 지정

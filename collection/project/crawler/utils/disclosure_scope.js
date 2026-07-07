@@ -90,13 +90,80 @@ function buildExplicitScopedDisclosureLookup(items, targetItems) {
     return { itemByCode, scopedCodes };
 }
 
-function buildDisclosureLookup(items, scopeConfig = DEFAULT_ALLOWED_MINOR_CATEGORIES) {
+// 전체 92개 공시항목을 모두 수집 대상으로 스코프
+function buildFullDisclosureLookup(items) {
+    const itemByCode = {};
+    const scopedCodes = new Set();
+
+    for (const item of items) {
+        const codes = normalizeCodeList(item.report_form_root_no);
+        const scd = codes[0] || '';
+        const record = { ...item, scd, report_nos: codes, codes, isScoped: true };
+
+        for (const code of codes) {
+            itemByCode[code] = record;
+            scopedCodes.add(code);
+        }
+        if (scd) itemByCode[scd] = record;
+    }
+
+    return { itemByCode, scopedCodes };
+}
+
+// CLI --items로 지정한 공시코드 목록만 스코프 (해당 항목의 분기 코드 전체 포함)
+function buildItemScopedDisclosureLookup(items, requestedCodes) {
+    const requested = new Set(normalizeCodeList(requestedCodes));
+    const itemByCode = {};
+    const scopedCodes = new Set();
+
+    for (const item of items) {
+        const codes = normalizeCodeList(item.report_form_root_no);
+        const scd = codes[0] || '';
+        const isScoped = codes.some(code => requested.has(code)) || requested.has(scd);
+        const record = { ...item, scd, report_nos: codes, codes, isScoped };
+
+        for (const code of codes) {
+            itemByCode[code] = record;
+            if (isScoped) scopedCodes.add(code);
+        }
+        if (scd && isScoped) itemByCode[scd] = record;
+    }
+
+    return { itemByCode, scopedCodes };
+}
+
+/**
+ * 스코프 결정 우선순위: CLI 오버라이드 > yaml scope 키 > target_items > 기본 카테고리.
+ * @param {object|string[]} scopeConfig crawl_targets.yaml 파싱 결과 또는 카테고리 배열
+ * @param {object} [cliOverride] { scope: 'all'|'categories'|'items', categories: [], items: [] }
+ */
+function buildDisclosureLookup(items, scopeConfig = DEFAULT_ALLOWED_MINOR_CATEGORIES, cliOverride = null) {
+    if (cliOverride) {
+        if (cliOverride.scope === 'all') return buildFullDisclosureLookup(items);
+        if (Array.isArray(cliOverride.items) && cliOverride.items.length) {
+            return buildItemScopedDisclosureLookup(items, cliOverride.items);
+        }
+        if (Array.isArray(cliOverride.categories) && cliOverride.categories.length) {
+            return buildCategoryScopedDisclosureLookup(items, cliOverride.categories);
+        }
+        if (cliOverride.scope === 'categories') {
+            return buildCategoryScopedDisclosureLookup(items, DEFAULT_ALLOWED_MINOR_CATEGORIES);
+        }
+    }
+
     if (Array.isArray(scopeConfig)) {
         return buildCategoryScopedDisclosureLookup(items, scopeConfig);
     }
 
-    if (scopeConfig && Array.isArray(scopeConfig.target_items)) {
-        return buildExplicitScopedDisclosureLookup(items, scopeConfig.target_items);
+    if (scopeConfig && typeof scopeConfig === 'object') {
+        const mode = String(scopeConfig.scope || '').trim();
+        if (mode === 'all') return buildFullDisclosureLookup(items);
+        if (mode === 'categories') {
+            return buildCategoryScopedDisclosureLookup(items, scopeConfig.minor_categories || DEFAULT_ALLOWED_MINOR_CATEGORIES);
+        }
+        if (Array.isArray(scopeConfig.target_items)) {
+            return buildExplicitScopedDisclosureLookup(items, scopeConfig.target_items);
+        }
     }
 
     return buildCategoryScopedDisclosureLookup(items, DEFAULT_ALLOWED_MINOR_CATEGORIES);
@@ -197,6 +264,8 @@ function hasMeaningfulOutput(crawlResult) {
 module.exports = {
     DEFAULT_ALLOWED_MINOR_CATEGORIES,
     buildDisclosureLookup,
+    buildFullDisclosureLookup,
+    buildItemScopedDisclosureLookup,
     buildStructuredPaths,
     extractMarkdownSections,
     getInstitutionFolderName,

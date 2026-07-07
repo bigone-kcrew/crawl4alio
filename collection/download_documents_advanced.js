@@ -21,34 +21,57 @@ const {
     buildStructuredManifest,
     upsertStructuredIndex
 } = require(path.join(__dirname, 'project/crawler/utils/structured_explorer'));
+const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
 
 const CRAWL4AI_URL = process.env.CRAWL4AI_URL || 'http://localhost:11235/crawl';
+const CRAWL4AI_TOKEN = (process.env.CRAWL4AI_API_TOKEN || '').trim();
+
+function parseList(value) {
+    return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
+}
 
 function parseArgs(argv) {
-    const args = { ministry: null, retryTargets: null };
+    const args = {
+        ministry: null,
+        retryTargets: null,
+        limit: 0,
+        year: null,
+        scope: null,        // 'all' | 'categories' | 'items'
+        categories: null,   // 중분류명 목록
+        items: null,        // 공시코드(SCD) 목록
+        apbaIds: null,      // 기관코드 목록
+        instType: null,     // 기관유형 (예: 기타공공기관)
+        printScope: false
+    };
+
     for (let i = 0; i < argv.length; i++) {
         const arg = argv[i];
-        if (arg === '--ministry') {
-            args.ministry = argv[i + 1] || '';
-            i += 1;
-            continue;
-        }
-        if (arg === '--retry-targets') {
-            args.retryTargets = argv[i + 1] || '';
-            i += 1;
-            continue;
-        }
-        if (arg.startsWith('--ministry=')) {
-            args.ministry = arg.slice('--ministry='.length);
-            continue;
-        }
-        if (arg.startsWith('--retry-targets=')) {
-            args.retryTargets = arg.slice('--retry-targets='.length);
+        const eq = arg.indexOf('=');
+        const name = eq > 0 ? arg.slice(0, eq) : arg;
+        const inlineValue = eq > 0 ? arg.slice(eq + 1) : null;
+        const takeValue = () => inlineValue !== null ? inlineValue : (argv[++i] || '');
+
+        switch (name) {
+            case '--ministry': args.ministry = takeValue(); break;
+            case '--retry-targets': args.retryTargets = takeValue(); break;
+            case '--limit': args.limit = parseInt(takeValue(), 10) || 0; break;
+            case '--year': args.year = String(takeValue()).trim(); break;
+            case '--scope': args.scope = takeValue().trim(); break;
+            case '--categories': args.categories = parseList(takeValue()); break;
+            case '--items': args.items = parseList(takeValue()); break;
+            case '--apba-ids': args.apbaIds = new Set(parseList(takeValue())); break;
+            case '--inst-type': args.instType = takeValue().trim(); break;
+            case '--print-scope': args.printScope = true; break;
         }
     }
     return args;
 }
 
+/**
+ * 재시도 대상 로드.
+ * 행에 disclosure_no가 있으면 해당 공시만, 없으면 그 (기관, 공시코드)의 전체 공시를 대상으로 한다.
+ * @returns {Map<apbaId, Map<reportNo, Set<disclosureNo>|null>>}
+ */
 function loadRetryTargets(filePath) {
     if (!filePath) return null;
 
@@ -58,13 +81,24 @@ function loadRetryTargets(filePath) {
 
     for (const row of rows) {
         const apbaId = String(row?.apba_id || '').trim();
-        const reportNo = String(row?.report_no || '').trim();
+        const reportNo = String(row?.report_no || row?.report_form_no || '').trim();
         if (!apbaId || !reportNo) continue;
 
         if (!targetsByInstitution.has(apbaId)) {
-            targetsByInstitution.set(apbaId, new Set());
+            targetsByInstitution.set(apbaId, new Map());
         }
-        targetsByInstitution.get(apbaId).add(reportNo);
+        const byReportNo = targetsByInstitution.get(apbaId);
+
+        const disclosureNo = String(row?.disclosure_no || '').trim();
+        if (!byReportNo.has(reportNo)) {
+            byReportNo.set(reportNo, disclosureNo ? new Set([disclosureNo]) : null);
+        } else if (disclosureNo) {
+            const existing = byReportNo.get(reportNo);
+            if (existing) existing.add(disclosureNo);
+            // existing이 null이면 이미 전체 공시 대상이므로 유지
+        } else {
+            byReportNo.set(reportNo, null);
+        }
     }
 
     return targetsByInstitution;
@@ -77,7 +111,10 @@ async function scrapeWithCrawl4AI(url) {
             word_count_threshold: 0,
             extraction_strategy: 'json',
             page_options: { only_main_content: true }
-        }, { timeout: 30000 });
+        }, {
+            timeout: 30000,
+            headers: CRAWL4AI_TOKEN ? { Authorization: `Bearer ${CRAWL4AI_TOKEN}` } : {}
+        });
 
         return normalizeCrawl4AIResult(response);
     } catch (err) {
@@ -96,30 +133,6 @@ async function fetchHtml(url) {
         logger.info(`HTML fetch failed for ${url}: ${err.message}`);
         return '';
     }
-}
-
-function shouldRetryLookup(err) {
-    const message = String(err?.message || '').toLowerCase();
-    return message.includes('socket hang up') || message.includes('timeout') || message.includes('econnreset');
-}
-
-async function postWithRetry(url, payload, maxAttempts = 3) {
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-            return await axios.post(url, payload, { timeout: 30000 });
-        } catch (err) {
-            lastError = err;
-            if (!shouldRetryLookup(err) || attempt === maxAttempts) {
-                throw err;
-            }
-            logger.info(`Retrying ${url} (${attempt}/${maxAttempts}) after ${err.message}`);
-            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-        }
-    }
-
-    throw lastError;
 }
 
 function buildDownloadUrl(att) {
@@ -164,95 +177,120 @@ async function fetchPdfJson(disclosureNo) {
     }
 }
 
-function normalizeReportRow(report, fallbackReportFormRootNo) {
-    const title = report?.title || report?.disclosure_title || '';
-    const yearMatch = String(report?.year || report?.critYyyy || title).match(/^(\d{4})/);
+const normalizeReportRow = alioApi.normalizeReportRow;
 
-    return {
-        apba_id: report?.apbaId || report?.apba_id || '',
-        report_form_root_no: String(report?.reportFormNo || report?.report_form_root_no || fallbackReportFormRootNo || '').trim(),
-        disclosure_no: String(report?.disclosureNo || report?.disclosure_no || '').trim(),
-        submission_no: String(report?.submissionNo || report?.submission_no || '').trim(),
-        year: String(report?.year || report?.critYyyy || (yearMatch ? yearMatch[1] : '') || '').trim(),
-        quarter: String(report?.quarter || '').trim(),
-        period_label: String(report?.period_label || '').trim(),
-        title,
-        disclosure_title: title
-    };
-}
-
-async function fetchLiveReportRows(apbaId, reportFormRootNo) {
-    if (!apbaId || !reportFormRootNo) return [];
+/**
+ * 캐시(reports.json)에 없는 (기관, 공시코드)의 공시 목록을 라이브 API로 조회.
+ * 수시공시는 전 페이지, 정기공시는 itemOrganListJung 최신 스냅샷을 반환.
+ * @returns {{ rows: object[], disclosure_kind: string }}
+ */
+async function fetchLiveReportRows(apbaId, reportFormRootNo, kindHint) {
+    if (!apbaId || !reportFormRootNo) return { rows: [], disclosure_kind: kindHint || '' };
 
     try {
-        const organResponse = await postWithRetry('https://www.alio.go.kr/item/itemOrganListSusi.json', {
-            apbaId,
-            reportFormRootNo
-        });
-
-        const organInfo = organResponse?.data?.data?.organInfo || {};
-        const apbaType = organInfo.apbaType || '';
-
-        const reportResponse = await postWithRetry('https://www.alio.go.kr/item/itemReportListSusi.json', {
-            pageNo: 1,
-            apbaId,
-            apbaType,
-            reportFormRootNo,
-            search_word: '',
-            search_flag: 'title',
-            bid_type: '',
-            enfc_istt: ''
-        });
-
-        const rows = reportResponse?.data?.data?.result || [];
-        return Array.isArray(rows) ? rows.map(row => normalizeReportRow(row, reportFormRootNo)) : [];
+        const { rows, disclosure_kind } = await alioApi.fetchReportRows(apbaId, reportFormRootNo, kindHint);
+        const normalized = rows
+            .map(row => normalizeReportRow(row, reportFormRootNo))
+            .map(row => ({ ...row, apba_id: row.apba_id || apbaId }));
+        return { rows: normalized, disclosure_kind };
     } catch (err) {
         logger.info(`Live report lookup failed for ${apbaId}/${reportFormRootNo}: ${err.message}`);
-        return [];
+        return { rows: [], disclosure_kind: kindHint || '' };
     }
 }
 
 async function downloadDocuments() {
     const institutions = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/institutions.json'), 'utf8'));
-    const reports = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/reports.json'), 'utf8'));
     const disclosureItems = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/disclosure_items.json'), 'utf8'));
     const crawlTargets = yaml.load(fs.readFileSync(path.join(__dirname, 'project/crawler/config/crawl_targets.yaml'), 'utf8'));
     const args = parseArgs(process.argv.slice(2));
     const retryTargets = loadRetryTargets(args.retryTargets);
 
-    const { itemByCode, scopedCodes } = buildDisclosureLookup(disclosureItems, crawlTargets);
+    // reports.json은 선택사항 — 없으면 (기관, 공시코드)별 라이브 API 조회로 대체
+    const reportsPath = path.join(__dirname, '../data/reports.json');
+    const reports = fs.existsSync(reportsPath) ? JSON.parse(fs.readFileSync(reportsPath, 'utf8')) : [];
+    if (reports.length === 0) {
+        logger.info('reports.json 없음 — 공시 목록을 ALIO 라이브 API로 조회합니다.');
+    }
+
+    const { itemByCode, scopedCodes } = buildDisclosureLookup(disclosureItems, crawlTargets, args);
+
+    if (args.printScope) {
+        const scopedItems = new Map();
+        for (const code of scopedCodes) {
+            const item = itemByCode[code];
+            if (item) scopedItems.set(item.scd, item);
+        }
+        console.log(`스코프 항목 ${scopedItems.size}개 / 공시코드 ${scopedCodes.size}개`);
+        for (const item of scopedItems.values()) {
+            const kind = item.disclosure_kind || (alioApi.PERIODIC_SCDS.has(item.scd) ? '정기' : '수시');
+            console.log(`  ${item.scd}  [${kind}] ${item.major_category} > ${item.minor_category} > ${item.item_name} (${item.codes.join(',')})`);
+        }
+        return;
+    }
+
     const structuredBase = path.join(__dirname, '../data/structured_data');
     const scopedReportFormNos = [...scopedCodes].sort();
-    const scopedInstitutions = institutions.filter(inst => {
+    let scopedInstitutions = institutions.filter(inst => {
         if (args.ministry && inst.ministry !== args.ministry) return false;
+        if (args.apbaIds && !args.apbaIds.has(inst.apba_id)) return false;
+        if (args.instType && inst.type !== args.instType) return false;
         if (retryTargets && !retryTargets.has(inst.apba_id)) return false;
         return true;
     });
+    if (args.limit > 0) scopedInstitutions = scopedInstitutions.slice(0, args.limit);
+
     const scopedReports = reports
         .filter(report => scopedCodes.has(String(report.report_form_root_no || '').trim()))
         .map(report => normalizeReportRow(report, report.report_form_root_no));
 
-    logger.info(`Starting advanced download for ${scopedInstitutions.length} institutions${args.ministry ? ` in ministry: ${args.ministry}` : ''}${retryTargets ? ` with retry targets: ${retryTargets.size} institutions` : ''}.`);
+    logger.info(`Starting advanced download for ${scopedInstitutions.length} institutions, ${scopedCodes.size} codes${args.ministry ? ` in ministry: ${args.ministry}` : ''}${args.year ? ` (year=${args.year})` : ''}${retryTargets ? ` with retry targets: ${retryTargets.size} institutions` : ''}.`);
 
     for (const inst of scopedInstitutions) {
-        const reportFormRootNos = retryTargets
-            ? [...(retryTargets.get(inst.apba_id) || [])].filter(code => scopedCodes.has(code))
+        const retryByReportNo = retryTargets ? (retryTargets.get(inst.apba_id) || new Map()) : null;
+        const reportFormRootNos = retryByReportNo
+            ? [...retryByReportNo.keys()].filter(code => scopedCodes.has(code))
             : scopedReportFormNos;
 
         for (const reportFormRootNo of reportFormRootNos) {
+            const scopedItem = itemByCode[reportFormRootNo] || null;
+            const kindHint = scopedItem?.disclosure_kind || null;
+
             const localReports = scopedReports.filter(report =>
                 report.apba_id === inst.apba_id && report.report_form_root_no === reportFormRootNo
             );
-            const reportsToProcess = localReports.length > 0
-                ? localReports
-                : await fetchLiveReportRows(inst.apba_id, reportFormRootNo);
+            let liveKind = '';
+            let reportsToProcess = localReports;
+            if (reportsToProcess.length === 0) {
+                const live = await fetchLiveReportRows(inst.apba_id, reportFormRootNo, kindHint);
+                reportsToProcess = live.rows;
+                liveKind = live.disclosure_kind;
+            }
+
+            // --year 필터 및 retry-targets의 disclosure_no 필터
+            if (args.year) {
+                reportsToProcess = reportsToProcess.filter(report => report.year === args.year);
+            }
+            const allowedDisclosures = retryByReportNo ? retryByReportNo.get(reportFormRootNo) : null;
+            if (allowedDisclosures) {
+                reportsToProcess = reportsToProcess.filter(report => allowedDisclosures.has(report.disclosure_no));
+            }
 
             if (reportsToProcess.length === 0) continue;
 
             for (const report of reportsToProcess) {
+                // 게시판형 항목(21110 내부규정 등)은 disclosureNo가 없음 —
+                // 상세페이지 크롤링 대상이 아니므로 스킵 (내부규정은 collect_institution_bylaws.js가 담당)
+                if (!report.disclosure_no) {
+                    logger.info(`Skipping ${inst.apba_id}/${report.report_form_root_no}: disclosureNo 없음 (게시판형 항목)`);
+                    continue;
+                }
+
                 const resolved = resolveDisclosureItem(report.report_form_root_no, itemByCode);
                 const item = resolved.item;
                 if (!item) continue;
+                const disclosureKind = liveKind || item.disclosure_kind
+                    || (alioApi.PERIODIC_SCDS.has(resolved.code) ? '정기' : '수시');
 
                 logger.info(`Processing: ${inst.name} - ${report.report_form_root_no}`);
                 const detailUrl = `https://www.alio.go.kr/item/itemReportTerm.do?apbaId=${inst.apba_id}&reportFormRootNo=${report.report_form_root_no}&disclosureNo=${report.disclosure_no}`;
@@ -287,7 +325,8 @@ async function downloadDocuments() {
                         report_form_root_no: report.report_form_root_no,
                         item_name: item.item_name || item.minor_category || '',
                         minor_category: item.minor_category || '',
-                        major_category: item.major_category || ''
+                        major_category: item.major_category || '',
+                        disclosure_kind: disclosureKind
                     },
                     source_url: detailUrl,
                     collected_at: new Date().toISOString(),
