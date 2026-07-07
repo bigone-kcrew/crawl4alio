@@ -17,7 +17,7 @@ kordoc/markitdown 모두 실패 또는 "빈 내용"으로 판정
 
 | 서비스 | 역할 | 기본 포트(예시) | 대체 가능 오픈소스 |
 |---|---|---|---|
-| kordoc | HWP/HWPX/PDF/XLSX/DOCX → Markdown 1차 변환 | 3400 | 자체 HWP 파서(`pyhwp`, `hwp5html` 등) 위에 이 API 스펙(`POST /parse`, multipart `file`, 응답 `{ result: { markdown } }`)으로 래핑 |
+| kordoc | HWP/HWPX/PDF/XLSX/DOCX → Markdown 1차 변환 | 3400 | [chrisryugj/kordoc](https://github.com/chrisryugj/kordoc) (`POST /parse`, multipart `file`, 응답 `{ result: { markdown } }`) |
 | markitdown | kordoc 실패 시 2차 폴백 | 3410 | [microsoft/markitdown](https://github.com/microsoft/markitdown)을 같은 API 스펙으로 서버화 |
 | PaddleOCR | 스캔 PDF/이미지 OCR 최종 폴백 | 13430 | [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) 서버, 응답에 `result.markdown` 포함 |
 | Crawl4AI | ALIO 상세페이지 크롤링(수집 단계) | 11235 | [unclecode/crawl4ai](https://github.com/unclecode/crawl4ai) Docker 이미지 그대로 사용 가능 |

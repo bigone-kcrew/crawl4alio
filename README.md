@@ -39,7 +39,7 @@
 - Crawl4AI: https://github.com/unclecode/crawl4ai (LLM 친화적 웹 크롤러)
 - MarkItDown: https://github.com/microsoft/markitdown (MS의 범용 문서→Markdown 변환기)
 - PaddleOCR: https://github.com/PaddlePaddle/PaddleOCR (OCR 엔진)
-- kordoc: 한글(HWP) 계열 문서를 Markdown으로 변환하는 파서 서버 — 사내/자체 구현체를 붙이거나 동등한 HWP 파서(예: `pyhwp`, `hwp5html` 기반 자체 서버)로 대체하세요.
+- kordoc: https://github.com/chrisryugj/kordoc (한글(HWP) 계열 문서를 Markdown으로 변환하는 파서 서버)
 
 ## 빠른 시작
 
