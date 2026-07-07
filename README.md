@@ -1,5 +1,7 @@
 # crawl4alio
 
+**GitHub**: https://github.com/bigone-kcrew/crawl4alio
+
 공공기관 경영정보 공개시스템([ALIO](https://www.alio.go.kr))과 국가법령정보([law.go.kr](https://www.law.go.kr)), 기관 내부규정 게시판을 수집하고, 첨부파일(HWP/PDF/XLSX 등)을 Markdown으로 변환하는 Node.js 도구 모음입니다.
 
 > 이 저장소는 **수집·변환 방법론(코드)만 배포**합니다. 실제로 수집된 데이터(경영공시 첨부파일, 법령 원문, 기관 내규 등)는 포함하지 않습니다. 각자 환경에서 직접 수집해서 사용하세요.
