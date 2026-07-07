@@ -130,4 +130,4 @@ crawl4alio/
 
 ## 라이선스
 
-MIT License. [LICENSE](LICENSE) 참고.
+MIT License. [LICENSE](LICENSE) 참고. 연동하는 제3자 오픈소스 도구(kordoc·PaddleOCR·Crawl4AI·MarkItDown)의 라이선스는 [NOTICE.md](NOTICE.md)를 참고하세요.
