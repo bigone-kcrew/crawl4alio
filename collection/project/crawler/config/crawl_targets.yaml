@@ -1,0 +1,60 @@
+target_items:
+  - scd: '10105'
+    report_nos: ['10105']
+  - scd: '21110'
+    report_nos: ['21110']
+  - scd: '20201'
+    report_nos: ['20201', '20202', '20203', '20204']
+  - scd: '20305'
+    report_nos: ['20305']
+  - scd: '20401'
+    report_nos: ['20401', '20402', '20403', '20404']
+  - scd: 'B1010'
+    report_nos: ['B1010']
+  - scd: 'B1020'
+    report_nos: ['B1020']
+  - scd: '31921'
+    report_nos: ['31921', '31922', '31923', '31924']
+  - scd: '21801'
+    report_nos: ['21801']
+  - scd: '21201'
+    report_nos: ['21201']
+  - scd: '21211'
+    report_nos: ['21211', '21212', '21213', '21214']
+  - scd: '20905'
+    report_nos: ['20905']
+  - scd: '20501'
+    report_nos: ['20501']
+  - scd: '20601'
+    report_nos: ['20601']
+  - scd: '20801'
+    report_nos: ['20801']
+  - scd: '63701'
+    report_nos: ['63701']
+  - scd: 'B1280'
+    report_nos: ['B1280']
+  - scd: '21021'
+    report_nos: ['21021', '21022', '21023', '21024']
+  - scd: '21025'
+    report_nos: ['21025']
+  - scd: '21026'
+    report_nos: ['21026']
+  - scd: '21027'
+    report_nos: ['21027']
+  - scd: '21028'
+    report_nos: ['21028']
+  - scd: '63787'
+    report_nos: ['63787']
+  - scd: '63795'
+    report_nos: ['63795']
+  - scd: '63796'
+    report_nos: ['63796']
+target_years:
+  - 2022
+  - 2023
+  - 2024
+  - 2025
+  - 2026
+random_delay:
+  - 2
+  - 7

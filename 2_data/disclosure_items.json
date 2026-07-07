@@ -1,0 +1,646 @@
+[
+  {
+    "report_form_root_no": "10105",
+    "item_name": "일반현황",
+    "major_category": "기관운영",
+    "minor_category": "일반현황",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21110",
+    "item_name": "내부규정",
+    "major_category": "기관운영",
+    "minor_category": "일반현황",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "20201,20202,20203,20204",
+    "item_name": "임직원 수",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "20305",
+    "item_name": "임원현황",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "20401,20402,20403,20404",
+    "item_name": "신규채용 현황",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "B1010",
+    "item_name": "임·직원 채용정보",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1020",
+    "item_name": "임·직원 채용정보",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "31921,31922,31923,31924",
+    "item_name": "임·직원 퇴직정보",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "21801",
+    "item_name": "임·직원 퇴직정보",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21201",
+    "item_name": "징계현황",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21211,21212,21213,21214",
+    "item_name": "징계현황",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "20905",
+    "item_name": "임원 국외출장 내역",
+    "major_category": "기관운영",
+    "minor_category": "인력관리",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "20501",
+    "item_name": "임원연봉",
+    "major_category": "기관운영",
+    "minor_category": "보수관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "20601",
+    "item_name": "직원 평균보수",
+    "major_category": "기관운영",
+    "minor_category": "보수관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "20701",
+    "item_name": "기관장 업무추진비",
+    "major_category": "기관운영",
+    "minor_category": "보수관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "20801",
+    "item_name": "복리후생비",
+    "major_category": "기관운영",
+    "minor_category": "복리후생",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "63701",
+    "item_name": "그 밖의 복리후생제도 등의 운영현황",
+    "major_category": "기관운영",
+    "minor_category": "복리후생",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "B1280",
+    "item_name": "그 밖의 복리후생제도 등의 운영현황",
+    "major_category": "기관운영",
+    "minor_category": "복리후생",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21021,21022,21023,21024",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "21025",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21026",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21027",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21028",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "63787",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "63795",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "63796",
+    "item_name": "노동조합 관련현황",
+    "major_category": "기관운영",
+    "minor_category": "노동조합",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "21301,21302,21303,21304",
+    "item_name": "소송 및 법률자문 현황",
+    "major_category": "기관운영",
+    "minor_category": "소송 및 자문",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "21311,21312,21313,21314",
+    "item_name": "소송 및 법률자문 현황",
+    "major_category": "기관운영",
+    "minor_category": "소송 및 자문",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "80402",
+    "item_name": "AI 활용현황",
+    "major_category": "기관운영",
+    "minor_category": "AI 활용",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "80104",
+    "item_name": "ESG 경영 및 운영위원회 현황",
+    "major_category": "ESG 운영",
+    "minor_category": "ESG 현황",
+    "cycle_type": "4"
+  },
+  {
+    "report_form_root_no": "70423",
+    "item_name": "대기환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "3"
+  },
+  {
+    "report_form_root_no": "21662",
+    "item_name": "대기환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "21672",
+    "item_name": "대기환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "21621",
+    "item_name": "자원환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21631",
+    "item_name": "자원환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21641",
+    "item_name": "자원환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21681",
+    "item_name": "자원환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "21691",
+    "item_name": "자원환경",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "70413",
+    "item_name": "환경보호",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "3"
+  },
+  {
+    "report_form_root_no": "B1270",
+    "item_name": "환경보호",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1290",
+    "item_name": "환경보호",
+    "major_category": "ESG 운영",
+    "minor_category": "E(환경)",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "70401",
+    "item_name": "안전관리",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "70442",
+    "item_name": "안전관리",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "70451,70452,70453,70454",
+    "item_name": "안전관리",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "70461",
+    "item_name": "안전관리",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "70471",
+    "item_name": "안전관리",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "70432",
+    "item_name": "정보보호",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "21502",
+    "item_name": "사회공헌 활동",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "21702",
+    "item_name": "인권경영",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "21401",
+    "item_name": "일·가정 양립 지원제도 및 양성평등 운영 현황",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "40102",
+    "item_name": "협력사 지원",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "40202",
+    "item_name": "협력사 지원",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "80202",
+    "item_name": "장애인 고용현황",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "70312",
+    "item_name": "구매실적",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "70322",
+    "item_name": "구매실적",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "80332",
+    "item_name": "구매실적",
+    "major_category": "ESG 운영",
+    "minor_category": "S(사회)",
+    "cycle_type": "2"
+  },
+  {
+    "report_form_root_no": "43005",
+    "item_name": "이사회",
+    "major_category": "ESG 운영",
+    "minor_category": "G(지배구조)",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "43009",
+    "item_name": "이사회",
+    "major_category": "ESG 운영",
+    "minor_category": "G(지배구조)",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "32311",
+    "item_name": "자체 감사부서 현황",
+    "major_category": "ESG 운영",
+    "minor_category": "G(지배구조)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "40211",
+    "item_name": "청렴도 평가결과",
+    "major_category": "ESG 운영",
+    "minor_category": "G(지배구조)",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "31201,31203",
+    "item_name": "요약 재무상태표",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1,3"
+  },
+  {
+    "report_form_root_no": "31301,31303",
+    "item_name": "요약 손익계산서 (또는 요약 포괄손익계산서)",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1,3"
+  },
+  {
+    "report_form_root_no": "31401",
+    "item_name": "수입·지출현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "31701",
+    "item_name": "자본금 및 주주현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "31801,31803",
+    "item_name": "장단기 차입금 현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1,3"
+  },
+  {
+    "report_form_root_no": "32301",
+    "item_name": "감사보고서",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "43006",
+    "item_name": "감사보고서",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "32211",
+    "item_name": "납세정보 현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "32225",
+    "item_name": "납세정보 현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "32226",
+    "item_name": "납세정보 현황",
+    "major_category": "경영성과",
+    "minor_category": "재무성과",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "31501",
+    "item_name": "주요사업",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "31601,31602,31603,31604",
+    "item_name": "투자집행내역",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "31901",
+    "item_name": "투자 및 출자·출연 현황",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "31935",
+    "item_name": "투자 및 출자·출연 현황",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "31965",
+    "item_name": "투자 및 출자·출연 현황",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "32001",
+    "item_name": "투자 및 출자·출연 현황",
+    "major_category": "경영성과",
+    "minor_category": "사업 및 투자",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "32101",
+    "item_name": "경영부담 비용추계",
+    "major_category": "경영성과",
+    "minor_category": "중장기 재무관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "32135",
+    "item_name": "경영부담 비용추계",
+    "major_category": "경영성과",
+    "minor_category": "중장기 재무관리",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "32603",
+    "item_name": "중장기 재무관리계획",
+    "major_category": "경영성과",
+    "minor_category": "중장기 재무관리",
+    "cycle_type": "3"
+  },
+  {
+    "report_form_root_no": "63601",
+    "item_name": "주요기관의 상세부채 정보",
+    "major_category": "경영성과",
+    "minor_category": "중장기 재무관리",
+    "cycle_type": "1"
+  },
+  {
+    "report_form_root_no": "B1230",
+    "item_name": "경영 평가결과",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "42605",
+    "item_name": "경영 평가결과",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "42703,42704",
+    "item_name": "경영 평가결과",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "3,4"
+  },
+  {
+    "report_form_root_no": "B1250",
+    "item_name": "경영 평가결과",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1210",
+    "item_name": "국회 등 외부평가",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1220-P2200",
+    "item_name": "국회 등 외부평가",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1220-P2300",
+    "item_name": "국회 등 외부평가",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1240",
+    "item_name": "고객만족도 조사결과",
+    "major_category": "대내외 평가 등",
+    "minor_category": "대내외 평가",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1030",
+    "item_name": "계약정보",
+    "major_category": "대내외 평가 등",
+    "minor_category": "정보공개",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "70301,70302,70303,70304",
+    "item_name": "계약정보",
+    "major_category": "대내외 평가 등",
+    "minor_category": "정보공개",
+    "cycle_type": "1,2,3,4"
+  },
+  {
+    "report_form_root_no": "B1040",
+    "item_name": "연구보고서",
+    "major_category": "대내외 평가 등",
+    "minor_category": "정보공개",
+    "cycle_type": "0"
+  },
+  {
+    "report_form_root_no": "B1260",
+    "item_name": "연구보고서",
+    "major_category": "대내외 평가 등",
+    "minor_category": "정보공개",
+    "cycle_type": "0"
+  }
+]

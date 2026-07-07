@@ -1,0 +1,12 @@
+node_modules/
+.env.api
+.env
+2_data/logs/
+2_data/structured_data/
+2_data/legal-md/
+2_data/legal-raw/
+2_data/institution-bylaws/
+2_data/institution-bylaws-raw/
+2_data/institution-bylaws-md/
+*.log
+.DS_Store

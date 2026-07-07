@@ -1,0 +1,32 @@
+{
+  "name": "crawl4alio",
+  "version": "1.0.0",
+  "description": "ALIO(공공기관 경영정보 공개시스템)·국가법령정보(law.go.kr)·기관 내규 수집 및 Markdown 변환 도구",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "collect:alio": "node collection/download_documents_advanced.js",
+    "collect:statistics": "node collection/download_statistics.js",
+    "collect:legal": "node collection/collect_legal_corpus.js",
+    "collect:bylaws": "node collection/collect_institution_bylaws.js",
+    "check:recency": "node collection/check_disclosure_recency.js",
+    "convert:markdown": "node collection/convert_to_markdown.js",
+    "convert:ocr": "node collection/convert_ocr_needed.js",
+    "convert:reference": "node collection/convert_reference_docs.js",
+    "convert:statistics": "node collection/process_statistics.js && node collection/convert_statistics_to_md.js && node collection/build_statistics_index.js",
+    "enrich:legal-ministry": "node collection/enrich_legal_ministry.js",
+    "build:file-index": "node collection/build_download_file_index.js",
+    "ocr:markdown": "node ocrtomarkdown/ocr-to-markdown.js"
+  },
+  "dependencies": {
+    "axios": "^1.16.1",
+    "cheerio": "^1.2.0",
+    "form-data": "^4.0.0",
+    "js-yaml": "^4.1.1",
+    "pdf-lib": "^1.17.1",
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5"
+  }
+}
