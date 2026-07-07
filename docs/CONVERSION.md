@@ -24,11 +24,28 @@ kordoc/markitdown 모두 실패 또는 "빈 내용"으로 판정
 
 파서 서버 응답 규격은 공통으로 `{ ok: boolean, result: { markdown: string }, error?: { code, message } }` 형태를 기대합니다. 직접 파서를 붙일 경우 이 규격에 맞추면 코드 수정 없이 연동됩니다.
 
+## 1-1. raw/md 저장 규약
+
+| 코퍼스 | raw(원본) | md(변환본) | 분리 방식 |
+|---|---|---|---|
+| ALIO 공시 | `data/structured_data/` | 기본: 원본 옆 `.md` / `--md-root` 지정 시 미러 트리 | 선택형 |
+| 법령 | `data/legal-raw/` (DRF JSON·별표 파일 포함) | `data/legal-md/` | 수집 시 미러 |
+| 기관 내규 | `data/institution-bylaws-raw/` | `data/institution-bylaws-md/` | 수집·변환 시 미러 |
+
+ALIO 공시를 raw/md 분리 배포하려면:
+
+```bash
+node collection/convert_to_markdown.js --md-root data/alio-md
+# 또는 MD_MIRROR_ROOT=data/alio-md node collection/convert_to_markdown.js
+```
+
+미러 모드는 `structured_data`와 동일한 `[부처]기관명_코드/SCD_항목명/연도/` 구조로 `.md`만 출력합니다. 미지정 시 기존 동작(원본 옆 저장)이며, 체크포인트에 출력 경로가 기록되므로 재실행해도 안전합니다.
+
 ## 2. 메인 변환 — `convert_to_markdown.js`
 
 - 입력: `build_download_file_index.js`가 생성한 `data/structured_data/download_files_index.json`
 - kordoc → markitdown 순으로 시도. 확장자별 라우팅은 스크립트 상단 `ROUTING` 상수 참고.
-- 변환 성공 시 YAML frontmatter(기관명·부처·연도·출처URL·파서명 등)를 붙여 원본 파일 옆에 `.md`로 저장.
+- 변환 성공 시 YAML frontmatter(기관명·부처·연도·출처URL·파서명 등)를 붙여 원본 파일 옆에 `.md`로 저장(`--md-root` 시 미러 트리).
 - 스캔 PDF 등으로 텍스트 추출이 사실상 안 되는 경우(`IMAGE_BASED_PDF` 에러, 20자 미만 결과 등) `ocr_needed`로 분류해 `data/logs/ocr_needed.json`에 기록.
 - 체크포인트(`data/logs/conversion_checkpoint.json`) 기반으로 재시작 가능. 파일 크기 기준으로 일반/대형 큐를 나눠 동시성을 다르게 적용.
 - 단일 실행 보장을 위한 락 파일(`data/logs/convert_main.lock`), stale lock 자동 감지.

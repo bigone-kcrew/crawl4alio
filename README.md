@@ -8,10 +8,11 @@
 
 ## 무엇을 할 수 있나요
 
-1. **ALIO 경영공시 수집** — 355개 공공기관의 노동조합/인력관리/보수관리/복리후생 등 원하는 공시 항목을 대상 기관·연도 범위로 지정해 상세페이지와 첨부파일을 수집
-2. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 법령 원문을 구조화 수집, 그 외 부처 지침은 크롤링+변환
-3. **기관 내부규정 수집** — ALIO `21110` 내부규정 게시판에서 기관별 최신 규정 파일 수집
-4. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환
+1. **ALIO 경영공시 수집** — 355개 공공기관 × 전체 92개 공시항목(정기/수시 자동 구분). 공시항목(`--scope all|--categories|--items`)과 기관(`--ministry|--apba-ids|--inst-type`)을 자유롭게 선택
+2. **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락 공시만 수집 (`sync_alio.js`: 반자동 report / 자동 apply, `sync_legal.js`: 법령 개정 감지)
+3. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), 그 외 부처 지침은 크롤링+변환
+4. **기관 내부규정 수집** — ALIO `21110` 게시판에서 기관별 규정 수집 (최신본 또는 `--all-files`로 개정 이력 전체)
+5. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환. ZIP 자동 해제(`extract_zips.js`), raw/md 미러 출력(`--md-root`) 지원
 
 ## 아키텍처
 
