@@ -12,6 +12,8 @@
  *   node collection/collect_institution_bylaws.js --dry-run    # 목록 확인만
  *   node collection/collect_institution_bylaws.js --apba-id C0847  # 단일 기관
  *   node collection/collect_institution_bylaws.js --survey     # 전체 규정 현황 분석
+ *   node collection/collect_institution_bylaws.js --all-files  # 게시글의 모든 첨부(과거 버전 포함) 수집
+ *                                                              # (기본: 마지막 첨부 = 최신본 1건만)
  */
 'use strict';
 
@@ -35,6 +37,7 @@ const CONCURRENCY   = 2;
 const REQUEST_DELAY = 400; // ms, 기관 처리 간 딜레이
 const DRY_RUN       = process.argv.includes('--dry-run');
 const SURVEY_MODE   = process.argv.includes('--survey');
+const ALL_FILES     = process.argv.includes('--all-files'); // 첨부 전체(과거 버전 포함) 수집
 const SINGLE_APBA   = process.argv.includes('--apba-id')
   ? process.argv[process.argv.indexOf('--apba-id') + 1] : null;
 
@@ -114,9 +117,10 @@ async function fetchDetailInfo(apbaId, idx, bidType) {
   });
   const html = res.data;
 
-  // 마지막 fileNo = 최신 버전
+  // 게시글 내 첨부 전체 (순서대로; 마지막 = 최신 버전)
   const fileMatches = [...html.matchAll(/rulefiledown\.json\?fileNo=(\d+)/g)];
-  const fileNo = fileMatches.length ? fileMatches[fileMatches.length - 1][1] : null;
+  const fileNos = [...new Set(fileMatches.map(m => m[1]))];
+  const fileNo = fileNos.length ? fileNos[fileNos.length - 1] : null;
 
   // 게시글 제목 (규정명)
   const titleM = html.match(/<span>\s*제목\s*<\/span>[\s\S]*?<p>([^<]+)<\/p>/);
@@ -126,7 +130,7 @@ async function fetchDetailInfo(apbaId, idx, bidType) {
   const dateM = html.match(/<span>\s*제[··]?개정일\s*<\/span>[\s\S]*?<p>([^<]+)<\/p>/);
   const idate = dateM ? dateM[1].trim().replace(/\./g, '') : null;
 
-  return { fileNo, pageTitle, idate };
+  return { fileNo, fileNos, pageTitle, idate };
 }
 
 // ── 파일 다운로드 ─────────────────────────────────────────────────────────────
@@ -188,15 +192,18 @@ async function collectRule(inst, rule, ckpt) {
   const tag = `[${apbaId}][${bidType}] ${title}`;
 
   try {
-    const { fileNo, pageTitle, idate: pageDate } = await fetchDetailInfo(apbaId, idx, bidType);
+    const { fileNo, fileNos, pageTitle, idate: pageDate } = await fetchDetailInfo(apbaId, idx, bidType);
     if (!fileNo) {
       console.log(`  SKIP ${tag} — fileNo 없음`);
       ckpt.skip[key] = { reason: 'no_fileNo', title, at: new Date().toISOString() };
       return;
     }
 
+    // 기본: 최신본(마지막 첨부) 1건 / --all-files: 게시글의 모든 첨부(과거 버전 포함)
+    const targetFileNos = ALL_FILES ? fileNos : [fileNo];
+
     if (DRY_RUN) {
-      console.log(`  DRY  ${tag} (idx=${idx}, fileNo=${fileNo}, title=${pageTitle})`);
+      console.log(`  DRY  ${tag} (idx=${idx}, files=${targetFileNos.length}/${fileNos.length}, title=${pageTitle})`);
       return;
     }
 
@@ -207,13 +214,25 @@ async function collectRule(inst, rule, ckpt) {
     const ruleTitle = pageTitle || title;
     const dateSuffix = pageDate || idate?.replace(/\./g, '') || '';
     const baseName = safeName(dateSuffix ? `${ruleTitle}_${dateSuffix}` : ruleTitle);
-    const { ext, destPath } = await downloadFile(fileNo, path.join(rawInstDir, baseName));
-    console.log(`  DOWN ${tag} — ${ext} (fileNo=${fileNo})`);
+
+    // 최신본은 baseName 그대로, 과거 버전은 _v01(가장 오래됨)부터 suffix
+    const downloaded = [];
+    for (const no of targetFileNos) {
+      const isLatest = no === fileNo;
+      const versionSuffix = isLatest ? '' : `_v${String(fileNos.indexOf(no) + 1).padStart(2, '0')}`;
+      const { ext, destPath } = await downloadFile(no, path.join(rawInstDir, baseName + versionSuffix));
+      downloaded.push({ fileNo: no, ext, path: destPath, latest: isLatest });
+      if (targetFileNos.length > 1) await sleep(200);
+    }
+    const latest = downloaded.find(d => d.latest) || downloaded[downloaded.length - 1];
+    console.log(`  DOWN ${tag} — ${latest.ext} (fileNo=${fileNo}${downloaded.length > 1 ? `, 전체 ${downloaded.length}건` : ''})`);
 
     ckpt.done[key] = {
-      title, idx, bidType, fileNo, ext, baseName, folderName,
+      title, idx, bidType, fileNo, ext: latest.ext, baseName, folderName,
       instName, ministry, apbaId, idate,
-      rawPath: destPath, md: false, at: new Date().toISOString(),
+      rawPath: latest.path,
+      files: downloaded.length > 1 ? downloaded : undefined,
+      md: false, at: new Date().toISOString(),
     };
 
   } catch (e) {

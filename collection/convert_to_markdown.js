@@ -88,6 +88,15 @@ const INDEX_PATH       = path.join(STRUCTURED_DIR, 'download_files_index.json');
 const CHECKPOINT_PATH  = path.join(ROOT, 'data', 'logs', 'conversion_checkpoint.json');
 const OCR_NEEDED_PATH  = path.join(ROOT, 'data', 'logs', 'ocr_needed.json');
 
+// MD 미러 출력 루트 (raw/md 트리 분리 배포용).
+// 미지정 시 기존 동작(원본 파일 옆에 .md 저장) 유지.
+//   MD_MIRROR_ROOT=data/alio-md node collection/convert_to_markdown.js
+//   node collection/convert_to_markdown.js --md-root data/alio-md
+const mdRootArgIdx = process.argv.indexOf('--md-root');
+const MD_MIRROR_ROOT = mdRootArgIdx >= 0 && process.argv[mdRootArgIdx + 1]
+  ? path.resolve(process.argv[mdRootArgIdx + 1])
+  : (process.env.MD_MIRROR_ROOT ? path.resolve(ROOT, process.env.MD_MIRROR_ROOT) : null);
+
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 
 const LOCK_PATH = path.join(__dirname, '../data/logs/convert_main.lock');
@@ -228,7 +237,9 @@ async function convertFile(entry, ckpt) {
 
   const ext     = file_name.split('.').pop().toLowerCase();
   const absPath = path.join(STRUCTURED_DIR, file_path);
-  const outputPath = absPath.replace(/\.[^.]+$/, '.md');
+  const outputPath = MD_MIRROR_ROOT
+    ? path.join(MD_MIRROR_ROOT, file_path).replace(/\.[^.]+$/, '.md')
+    : absPath.replace(/\.[^.]+$/, '.md');
   const parsers = ROUTING[ext];
   const meta = { institution_name, ministry, apba_id, scd, item_name,
                  year, source_url, minor_category, original_file: file_name };
@@ -300,6 +311,7 @@ async function convertFile(entry, ckpt) {
   if (markdown) {
     const frontmatter = buildFrontmatter(meta, usedParser);
     const footer = `\n\n<!-- source: ${file_name} -->\n<!-- converted_at: ${now} -->`;
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, frontmatter + markdown + footer, 'utf8');
 
     ckpt.files[id] = { status: 'success', parser: usedParser, output: outputPath, processed_at: now };
