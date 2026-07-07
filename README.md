@@ -17,17 +17,18 @@
 ## 아키텍처
 
 ```mermaid
-flowchart TD
-    A["ALIO 상세페이지"] --> B["Crawl4AI<br/>(Docker, 별도 배포 필요)"]
-    B --> C["content.json / content.md<br/>첨부파일 다운로드"]
-    C --> D{"변환 파이프라인<br/>(fallback chain)"}
-    D --> E["kordoc<br/>HWP3/5 · HWPX · PDF · XLS(X) · DOCX"]
+flowchart LR
+    A["ALIO<br/>상세페이지"] --> B["Crawl4AI<br/>본문/표 수집"]
+    B --> C["content.json<br/>content.md<br/>첨부파일"]
+    C --> D["변환 파이프라인"]
+
+    D --> E["kordoc<br/>HWP/HWPX/PDF/XLSX/DOCX"]
     E -->|실패 시| F["markitdown"]
-    F --> G{"스캔 PDF 등<br/>텍스트 추출 실패?"}
-    G -->|예| H["PaddleOCR"]
-    G -->|아니오| I["기관별 .md 산출물"]
-    H --> I
-    E --> I
+    F -->|스캔 PDF 등<br/>텍스트 추출 실패| G["PaddleOCR"]
+
+    E --> H["기관별<br/>.md 산출물"]
+    F --> H
+    G --> H
 ```
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
