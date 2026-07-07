@@ -9,7 +9,7 @@
 |---|---|
 | Git | https://git-scm.com/downloads |
 | Node.js 18+ | https://nodejs.org (LTS 권장) |
-| Docker | **Windows/Mac**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) · **Linux**: `curl -fsSL https://get.docker.com | sh` 후 `sudo usermod -aG docker $USER` (재로그인) |
+| Docker 엔진 (**이미 설치돼 있다면 생략**) | 컨테이너 실행 기반 자체 — 없을 때만: **Windows/Mac** [Docker Desktop](https://www.docker.com/products/docker-desktop/) · **Linux** `curl -fsSL https://get.docker.com \| sh` 후 `sudo usermod -aG docker $USER` (재로그인) |
 | law.go.kr API 키 | https://open.law.go.kr 에서 회원가입 → Open API 신청 → 이용자 ID(OC) 확인 (법령 수집 시에만 필요) |
 
 ## 1. 저장소 설치
@@ -21,11 +21,14 @@ npm install                # kordoc(HWP 파서) 포함 — 별도 파서 설치 
 cp .env.example .env.api   # 편집: OPENAPILAWKEY(law.go.kr 키) 입력
 ```
 
-## 2. 파서 스택 기동 (Docker)
+## 2. 파서 컨테이너 기동
+
+이 프로젝트가 쓰는 컨테이너(crawl4ai 공식 이미지, paddleocr 자체 이미지)는 **별도 설치 과정이 없습니다** —
+아래 명령 한 번이면 이미지 다운로드부터 실행까지 자동으로 끝납니다(Docker 엔진만 있으면 됨).
 
 ```bash
 cd deploy
-docker compose up -d crawl4ai paddleocr
+docker compose up -d crawl4ai paddleocr   # 이미지 자동 pull/build + 컨테이너 기동
 docker compose ps          # 두 서비스 Up 확인
 ```
 
