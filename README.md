@@ -18,25 +18,19 @@
 
 ```mermaid
 flowchart LR
-    subgraph S1["1. 수집"]
-        A["ALIO<br/>상세페이지"] --> B["Crawl4AI<br/>본문·표 수집"]
-        B --> C["content.json<br/>content.md<br/>첨부파일"]
-    end
-
-    subgraph S2["2. 변환"]
-        D["kordoc<br/>HWP/HWPX/PDF/XLSX/DOCX"] -->|실패 시| E["markitdown"]
-        E -->|스캔 PDF 등| F["PaddleOCR"]
-    end
-
-    subgraph S3["3. 산출"]
-        G["기관별<br/>Markdown 산출물"]
-    end
-
-    C --> D
-    D --> G
-    E --> G
-    F --> G
+    A["ALIO"] --> B["Crawl4AI"]
+    B --> C["원문/첨부파일"]
+    C --> D["변환 파이프라인"]
+    D --> E["기관별 Markdown"]
 ```
+
+| 단계 | 구성요소 | 역할 |
+|---|---|---|
+| 수집 | Crawl4AI | ALIO 상세페이지의 본문·표·첨부파일 수집 |
+| 1차 변환 | kordoc | HWP/HWPX/PDF/XLSX/DOCX 변환 |
+| 보조 변환 | markitdown | kordoc 실패 시 대체 변환 |
+| OCR | PaddleOCR | 스캔 PDF 등 텍스트 추출 실패 문서 처리 |
+| 산출 | Markdown | 기관별 `.md` 파일 생성 |
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
 - **Crawl4AI**(ALIO 본문 표)와 **PaddleOCR**(스캔 PDF)은 외부 서비스로, 풀스택 프로필의 docker compose에 포함되어 있습니다.
