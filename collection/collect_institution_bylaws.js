@@ -8,10 +8,10 @@
  *       institution-bylaws/md/[기관코드]/  (MD 변환본)
  *
  * 실행:
- *   node 1_collection/collect_institution_bylaws.js              # 전체 수집
- *   node 1_collection/collect_institution_bylaws.js --dry-run    # 목록 확인만
- *   node 1_collection/collect_institution_bylaws.js --apba-id C0847  # 단일 기관
- *   node 1_collection/collect_institution_bylaws.js --survey     # 전체 규정 현황 분석
+ *   node collection/collect_institution_bylaws.js              # 전체 수집
+ *   node collection/collect_institution_bylaws.js --dry-run    # 목록 확인만
+ *   node collection/collect_institution_bylaws.js --apba-id C0847  # 단일 기관
+ *   node collection/collect_institution_bylaws.js --survey     # 전체 규정 현황 분석
  */
 'use strict';
 
@@ -22,10 +22,10 @@ const FormData = require('form-data');
 
 // ── 설정 ──────────────────────────────────────────────────────────────────────
 const ALIO_BASE       = 'https://www.alio.go.kr';
-const KORDOC_URL      = process.env.KORDOC_PARSE_URL     || 'http://kordoc:3400/parse';
-const MARKITDOWN_URL  = process.env.MARKITDOWN_PARSE_URL || 'http://markitdown:3410/parse';
+const KORDOC_URL      = process.env.KORDOC_PARSE_URL     || 'http://localhost:3400/parse';
+const MARKITDOWN_URL  = process.env.MARKITDOWN_PARSE_URL || 'http://localhost:3410/parse';
 
-const DATA_DIR   = path.join(__dirname, '..', '2_data');
+const DATA_DIR   = path.join(__dirname, '..', 'data');
 const RAW_DIR    = path.join(DATA_DIR, 'institution-bylaws-raw');
 const MD_DIR     = path.join(DATA_DIR, 'institution-bylaws-md');
 const CKPT_PATH  = path.join(DATA_DIR, 'institution-bylaws/collect_checkpoint.json');

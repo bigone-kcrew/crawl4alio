@@ -213,15 +213,15 @@ async function fetchLiveReportRows(apbaId, reportFormRootNo) {
 }
 
 async function downloadDocuments() {
-    const institutions = JSON.parse(fs.readFileSync(path.join(__dirname, '../2_data/institutions.json'), 'utf8'));
-    const reports = JSON.parse(fs.readFileSync(path.join(__dirname, '../2_data/reports.json'), 'utf8'));
-    const disclosureItems = JSON.parse(fs.readFileSync(path.join(__dirname, '../2_data/disclosure_items.json'), 'utf8'));
+    const institutions = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/institutions.json'), 'utf8'));
+    const reports = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/reports.json'), 'utf8'));
+    const disclosureItems = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/disclosure_items.json'), 'utf8'));
     const crawlTargets = yaml.load(fs.readFileSync(path.join(__dirname, 'project/crawler/config/crawl_targets.yaml'), 'utf8'));
     const args = parseArgs(process.argv.slice(2));
     const retryTargets = loadRetryTargets(args.retryTargets);
 
     const { itemByCode, scopedCodes } = buildDisclosureLookup(disclosureItems, crawlTargets);
-    const structuredBase = path.join(__dirname, '../2_data/structured_data');
+    const structuredBase = path.join(__dirname, '../data/structured_data');
     const scopedReportFormNos = [...scopedCodes].sort();
     const scopedInstitutions = institutions.filter(inst => {
         if (args.ministry && inst.ministry !== args.ministry) return false;

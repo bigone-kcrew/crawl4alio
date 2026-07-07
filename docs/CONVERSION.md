@@ -26,12 +26,12 @@ kordoc/markitdown 모두 실패 또는 "빈 내용"으로 판정
 
 ## 2. 메인 변환 — `convert_to_markdown.js`
 
-- 입력: `build_download_file_index.js`가 생성한 `2_data/structured_data/download_files_index.json`
+- 입력: `build_download_file_index.js`가 생성한 `data/structured_data/download_files_index.json`
 - kordoc → markitdown 순으로 시도. 확장자별 라우팅은 스크립트 상단 `ROUTING` 상수 참고.
 - 변환 성공 시 YAML frontmatter(기관명·부처·연도·출처URL·파서명 등)를 붙여 원본 파일 옆에 `.md`로 저장.
-- 스캔 PDF 등으로 텍스트 추출이 사실상 안 되는 경우(`IMAGE_BASED_PDF` 에러, 20자 미만 결과 등) `ocr_needed`로 분류해 `2_data/logs/ocr_needed.json`에 기록.
-- 체크포인트(`2_data/logs/conversion_checkpoint.json`) 기반으로 재시작 가능. 파일 크기 기준으로 일반/대형 큐를 나눠 동시성을 다르게 적용.
-- 단일 실행 보장을 위한 락 파일(`2_data/logs/convert_main.lock`), stale lock 자동 감지.
+- 스캔 PDF 등으로 텍스트 추출이 사실상 안 되는 경우(`IMAGE_BASED_PDF` 에러, 20자 미만 결과 등) `ocr_needed`로 분류해 `data/logs/ocr_needed.json`에 기록.
+- 체크포인트(`data/logs/conversion_checkpoint.json`) 기반으로 재시작 가능. 파일 크기 기준으로 일반/대형 큐를 나눠 동시성을 다르게 적용.
+- 단일 실행 보장을 위한 락 파일(`data/logs/convert_main.lock`), stale lock 자동 감지.
 
 ```bash
 node collection/convert_to_markdown.js --dry-run       # 실제 변환 없이 라우팅만 확인

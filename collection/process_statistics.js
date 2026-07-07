@@ -3,8 +3,8 @@ const path = require('path');
 const XLSX = require('xlsx');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 
-const RAW_DIR = path.join(__dirname, '../2_data/raw/statistics');
-const PROCESSED_DIR = path.join(__dirname, '../2_data/processed/statistics');
+const RAW_DIR = path.join(__dirname, '../data/raw/statistics');
+const PROCESSED_DIR = path.join(__dirname, '../data/processed/statistics');
 
 function processExcelFile(filePath, fileName) {
     const workbook = XLSX.readFile(filePath);

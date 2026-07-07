@@ -18,7 +18,7 @@
  *   CRAWL4AI_HOST        (default: localhost:11235)
  *   KORDOC_URL           (default: http://localhost:3400/parse)
  *   PADDLEOCR_URL        (default: http://localhost:13430/parse)
- *   LEGAL_MD_ROOT        (default: 2_data/legal-md)
+ *   LEGAL_MD_ROOT        (default: data/legal-md)
  *   CONCURRENT           동시 수집 수 (default: 3)
  */
 
@@ -38,8 +38,8 @@ const KORDOC_URL     = process.env.KORDOC_URL    || 'http://localhost:3400/parse
 const PADDLEOCR_URL  = process.env.PADDLEOCR_URL || 'http://localhost:13430/parse';
 const DRF_OC         = (process.env.OPENAPILAWKEY || process.env.LAW_OC || '').trim();
 const MIN_MD_CHARS   = 50;
-const ROOT           = path.resolve(__dirname, '..', process.env.LEGAL_MD_ROOT  || '2_data/legal-md');
-const RAW_ROOT       = path.resolve(__dirname, '..', process.env.LEGAL_RAW_ROOT || '2_data/legal-raw');
+const ROOT           = path.resolve(__dirname, '..', process.env.LEGAL_MD_ROOT  || 'data/legal-md');
+const RAW_ROOT       = path.resolve(__dirname, '..', process.env.LEGAL_RAW_ROOT || 'data/legal-raw');
 const MANIFEST_PATH  = path.join(ROOT, 'source_manifest.json');
 const CONCURRENT     = Math.min(parseInt(process.env.CONCURRENT || '3'), 6);
 const CRAWL_TIMEOUT  = 90000;

@@ -4,7 +4,7 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '../../../../');
 const collectionRoot = path.resolve(__dirname, '../../../');
 const crawlerRoot = path.join(collectionRoot, 'project', 'crawler');
-const catalogRoot = path.join(repoRoot, '2_data');
+const catalogRoot = path.join(repoRoot, 'data');
 const processedDataRoot = path.join(catalogRoot, 'data');
 const logsRoot = path.join(catalogRoot, 'logs');
 

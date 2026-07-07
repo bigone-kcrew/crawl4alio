@@ -5,8 +5,8 @@ const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 
 const BASE_URL = 'https://www.alio.go.kr';
 const RECENT_LIST_API = `${BASE_URL}/status/findDisclosureList.json`;
-const INDEX_PATH = path.join(__dirname, '../2_data/structured_data/index.json');
-const RETRY_TARGETS_PATH = path.join(__dirname, '../2_data/logs/recency_retry_targets.json');
+const INDEX_PATH = path.join(__dirname, '../data/structured_data/index.json');
+const RETRY_TARGETS_PATH = path.join(__dirname, '../data/logs/recency_retry_targets.json');
 
 async function fetchRecentDisclosures() {
     try {

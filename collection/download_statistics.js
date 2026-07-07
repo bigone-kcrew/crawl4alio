@@ -5,7 +5,7 @@ const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 
 const BASE_URL = 'https://www.alio.go.kr';
 const REFERER = `${BASE_URL}/statistics/statisticsDownload.do`;
-const RAW_DIR = path.join(__dirname, '../2_data/raw/statistics');
+const RAW_DIR = path.join(__dirname, '../data/raw/statistics');
 
 const STATISTICS_MAP = [
     { code: 'excelDrop2020', name: '임직원수현황.xlsx' },

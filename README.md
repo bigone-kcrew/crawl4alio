@@ -85,7 +85,7 @@ crawl4alio/
 │       ├── config/crawl_targets.yaml    # 수집 대상 공시코드·연도 설정
 │       └── utils/                       # 크롤러 공용 유틸(경로, 로깅, 첨부추출 등)
 ├── ocrtomarkdown/                # PaddleOCR 응답을 .md로 저장하는 독립 CLI
-├── 2_data/
+├── data/
 │   ├── institutions.json        # ALIO 355개 공공기관 목록 (공개 정보, 시드 데이터)
 │   └── disclosure_items.json    # ALIO 공시항목 코드 체계 (공개 정보, 시드 데이터)
 ├── docs/
@@ -94,7 +94,7 @@ crawl4alio/
 └── LICENSE
 ```
 
-`2_data/` 하위의 수집 결과물(`structured_data/`, `legal-md/`, `institution-bylaws*/`, `logs/`)은 `.gitignore` 처리되어 있습니다 — 직접 실행해서 채우세요.
+`data/` 하위의 수집 결과물(`structured_data/`, `legal-md/`, `institution-bylaws*/`, `logs/`)은 `.gitignore` 처리되어 있습니다 — 직접 실행해서 채우세요.
 
 ## 법적/윤리적 참고사항
 

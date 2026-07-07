@@ -6,9 +6,9 @@
  * 원본 파일과 같은 폴더에 .md를 저장하고 체크포인트를 success로 업데이트한다.
  *
  * Usage:
- *   node 1_collection/convert_ocr_needed.js
- *   node 1_collection/convert_ocr_needed.js --dry-run
- *   PADDLEOCR_PARSE_URL=http://... node 1_collection/convert_ocr_needed.js
+ *   node collection/convert_ocr_needed.js
+ *   node collection/convert_ocr_needed.js --dry-run
+ *   PADDLEOCR_PARSE_URL=http://... node collection/convert_ocr_needed.js
  */
 
 'use strict';
@@ -23,7 +23,7 @@ const yaml   = require('js-yaml');
 process.on('SIGPIPE', () => {});
 
 // ── 로그: stdout이 TTY면 파일에도 기록, nohup 리다이렉트 시엔 stdout만 사용 ──
-const LOG_PATH = path.join(__dirname, '../2_data/logs/ocr_conversion_run.log');
+const LOG_PATH = path.join(__dirname, '../data/logs/ocr_conversion_run.log');
 const _log = console.log.bind(console);
 const IS_TTY = Boolean(process.stdout.isTTY);
 console.log = (...args) => {
@@ -38,14 +38,14 @@ console.log = (...args) => {
 
 // ── 경로 ───────────────────────────────────────────────────────────────────────
 const ROOT            = path.join(__dirname, '..');
-const STRUCTURED_DIR  = path.join(ROOT, '2_data', 'structured_data');
+const STRUCTURED_DIR  = path.join(ROOT, 'data', 'structured_data');
 const INDEX_PATH      = path.join(STRUCTURED_DIR, 'download_files_index.json');
-const MAIN_CKPT_PATH  = path.join(ROOT, '2_data', 'logs', 'conversion_checkpoint.json');
+const MAIN_CKPT_PATH  = path.join(ROOT, 'data', 'logs', 'conversion_checkpoint.json');
 // 메인 변환과 충돌 방지: OCR 전용 별도 체크포인트 사용
-const OCR_CKPT_PATH   = path.join(ROOT, '2_data', 'logs', 'ocr_checkpoint.json');
-const OCR_NEEDED_PATH = path.join(ROOT, '2_data', 'logs', 'ocr_needed.json');
+const OCR_CKPT_PATH   = path.join(ROOT, 'data', 'logs', 'ocr_checkpoint.json');
+const OCR_NEEDED_PATH = path.join(ROOT, 'data', 'logs', 'ocr_needed.json');
 // 중복 실행 방지용 락파일
-const LOCK_PATH       = path.join(ROOT, '2_data', 'logs', 'ocr_convert.lock');
+const LOCK_PATH       = path.join(ROOT, 'data', 'logs', 'ocr_convert.lock');
 
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 function acquireLock() {
@@ -390,7 +390,7 @@ async function main() {
   }
 
   // 우선처리 파일: priority_ocr.json에 등록된 경로 → 맨 앞으로
-  const PRIORITY_PATH = path.join(ROOT, '2_data', 'logs', 'priority_ocr.json');
+  const PRIORITY_PATH = path.join(ROOT, 'data', 'logs', 'priority_ocr.json');
   const prioritySet = new Set();
   if (fs.existsSync(PRIORITY_PATH)) {
     try { JSON.parse(fs.readFileSync(PRIORITY_PATH,'utf8')).paths.forEach(p => prioritySet.add(p)); } catch {}

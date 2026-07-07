@@ -14,12 +14,12 @@ target_years: [2022, 2023, 2024, 2025, 2026]
 random_delay: [2, 7]        # 요청 간 랜덤 지연(초)
 ```
 
-기관 목록은 `2_data/institutions.json`(공공기관 코드·부처·유형), 공시항목 메타는 `2_data/disclosure_items.json`(대분류/중분류 체계)을 사용합니다. 둘 다 ALIO가 공개하는 정적 메타데이터이며 이 저장소에 시드로 포함되어 있습니다.
+기관 목록은 `data/institutions.json`(공공기관 코드·부처·유형), 공시항목 메타는 `data/disclosure_items.json`(대분류/중분류 체계)을 사용합니다. 둘 다 ALIO가 공개하는 정적 메타데이터이며 이 저장소에 시드로 포함되어 있습니다.
 
 ### 동작 방식
 
 1. `institutions.json` × `disclosure_items.json` × `crawl_targets.yaml`을 조합해 (기관, 공시코드) 대상 목록을 만듭니다.
-2. 기관·코드별 공시 목록은 `2_data/reports.json`(사전 캐시, 선택사항)을 먼저 찾고, 없으면 ALIO 라이브 API(`itemOrganListSusi.json`, `itemReportListSusi.json`)로 직접 조회합니다. 즉 `reports.json` 없이도 동작하지만, 매 실행마다 라이브 조회가 필요해 느려집니다.
+2. 기관·코드별 공시 목록은 `data/reports.json`(사전 캐시, 선택사항)을 먼저 찾고, 없으면 ALIO 라이브 API(`itemOrganListSusi.json`, `itemReportListSusi.json`)로 직접 조회합니다. 즉 `reports.json` 없이도 동작하지만, 매 실행마다 라이브 조회가 필요해 느려집니다.
 3. 상세페이지(`itemReportTerm.do?apbaId=...&reportFormRootNo=...&disclosureNo=...`)를 **Crawl4AI**로 크롤링해 표를 구조화 JSON/Markdown으로 변환합니다.
 4. 보고서 HTML(`itemReport.do`)을 직접 파싱해 첨부파일(PDF/HWP/ZIP 등) 링크를 뽑아 스트림 다운로드합니다.
 5. 결과를 `기관 → SCD(공시코드) → 연도` 계층으로 저장합니다. 성공한 결과가 있을 때만 디렉터리를 만들어 빈 폴더가 남지 않습니다.

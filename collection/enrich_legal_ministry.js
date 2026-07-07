@@ -10,7 +10,7 @@ const https = require('https');
 const path = require('path');
 
 const OC = process.env.LAW_OC || '';
-const MANIFEST = process.env.LEGAL_MANIFEST_PATH || path.join(__dirname, '..', '2_data', 'legal-md', 'source_manifest.json');
+const MANIFEST = process.env.LEGAL_MANIFEST_PATH || path.join(__dirname, '..', 'data', 'legal-md', 'source_manifest.json');
 
 if (!OC) {
   console.error('LAW_OC 환경변수가 필요합니다 (law.go.kr Open API 신청 시 발급받은 이용자 ID).');

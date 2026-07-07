@@ -12,8 +12,8 @@
  *   CONCURRENT=3 node convert_to_markdown.js
  *
  * Env:
- *   KORDOC_PARSE_URL      (default: http://kordoc:3400/parse)
- *   MARKITDOWN_PARSE_URL  (default: http://markitdown:3410/parse)
+ *   KORDOC_PARSE_URL      (default: http://localhost:3400/parse)
+ *   MARKITDOWN_PARSE_URL  (default: http://localhost:3410/parse)
  *   CONCURRENT            일반 파일 동시 처리 수 (default: 5)
  *   CONCURRENT_LARGE      대형 파일 동시 처리 수 (default: 2)
  *   LARGE_FILE_MB         대형 파일 기준 MB (default: 10)
@@ -30,7 +30,7 @@ const yaml = require('js-yaml');
 process.on('SIGPIPE', () => {});
 
 // TTY 환경: 파일 + stdout 동시 기록 / nohup 리다이렉트 환경: stdout만(nohup이 파일로 연결)
-const LOG_PATH = path.join(__dirname, '../2_data/logs/conversion_run.log');
+const LOG_PATH = path.join(__dirname, '../data/logs/conversion_run.log');
 const IS_TTY   = Boolean(process.stdout.isTTY);
 const _origLog = console.log.bind(console);
 console.log = (...args) => {
@@ -43,8 +43,8 @@ console.log = (...args) => {
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
-const KORDOC_URL     = process.env.KORDOC_PARSE_URL     || 'http://kordoc:3400/parse';
-const MARKITDOWN_URL = process.env.MARKITDOWN_PARSE_URL || 'http://markitdown:3410/parse';
+const KORDOC_URL     = process.env.KORDOC_PARSE_URL     || 'http://localhost:3400/parse';
+const MARKITDOWN_URL = process.env.MARKITDOWN_PARSE_URL || 'http://localhost:3410/parse';
 const CONCURRENT       = Math.min(parseInt(process.env.CONCURRENT       || '5'), 10);
 const CONCURRENT_LARGE = Math.min(parseInt(process.env.CONCURRENT_LARGE || '2'), 5);
 const LARGE_BYTES      = parseInt(process.env.LARGE_FILE_MB || '10') * 1024 * 1024;
@@ -83,14 +83,14 @@ const OCR_ERROR_PATTERNS = [
 // ── 경로 ───────────────────────────────────────────────────────────────────────
 
 const ROOT             = path.join(__dirname, '..');
-const STRUCTURED_DIR   = path.join(ROOT, '2_data', 'structured_data');
+const STRUCTURED_DIR   = path.join(ROOT, 'data', 'structured_data');
 const INDEX_PATH       = path.join(STRUCTURED_DIR, 'download_files_index.json');
-const CHECKPOINT_PATH  = path.join(ROOT, '2_data', 'logs', 'conversion_checkpoint.json');
-const OCR_NEEDED_PATH  = path.join(ROOT, '2_data', 'logs', 'ocr_needed.json');
+const CHECKPOINT_PATH  = path.join(ROOT, 'data', 'logs', 'conversion_checkpoint.json');
+const OCR_NEEDED_PATH  = path.join(ROOT, 'data', 'logs', 'ocr_needed.json');
 
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 
-const LOCK_PATH = path.join(__dirname, '../2_data/logs/convert_main.lock');
+const LOCK_PATH = path.join(__dirname, '../data/logs/convert_main.lock');
 
 function acquireLock() {
   if (fs.existsSync(LOCK_PATH)) {

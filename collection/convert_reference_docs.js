@@ -4,11 +4,11 @@
  * legal 등 corpus에 새 원본을 추가할 때 raw 폴더를 md 폴더로 미러 변환하는 재사용 스크립트.
  *
  * 사용법:
- *   node 1_collection/convert_reference_docs.js                 # 기본: legal-raw/법령자료 → legal-md/법령자료
- *   node 1_collection/convert_reference_docs.js --src <dir> --dest <dir>
- *   node 1_collection/convert_reference_docs.js --dry           # 미리보기(변환 안 함)
- *   node 1_collection/convert_reference_docs.js --force         # 이미 md 있어도 재변환
- *   node 1_collection/convert_reference_docs.js --only 표준·권장안   # 하위 폴더명 필터
+ *   node collection/convert_reference_docs.js                 # 기본: legal-raw/법령자료 → legal-md/법령자료
+ *   node collection/convert_reference_docs.js --src <dir> --dest <dir>
+ *   node collection/convert_reference_docs.js --dry           # 미리보기(변환 안 함)
+ *   node collection/convert_reference_docs.js --force         # 이미 md 있어도 재변환
+ *   node collection/convert_reference_docs.js --only 표준·권장안   # 하위 폴더명 필터
  *
  * 엔드포인트(환경변수로 override):
  *   KORDOC_PARSE_URL     (default http://localhost:3400/parse)
@@ -31,8 +31,8 @@ const OCR_TIMEOUT = 3600000;
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
 const opt  = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i+1] ? args[i+1] : d; };
-const SRC  = path.resolve(opt('--src',  path.join(__dirname, '..', '2_data', 'legal-raw', '법령자료')));
-const DEST = path.resolve(opt('--dest', path.join(__dirname, '..', '2_data', 'legal-md', '법령자료')));
+const SRC  = path.resolve(opt('--src',  path.join(__dirname, '..', 'data', 'legal-raw', '법령자료')));
+const DEST = path.resolve(opt('--dest', path.join(__dirname, '..', 'data', 'legal-md', '법령자료')));
 const ONLY = opt('--only', '');
 const DRY = flag('--dry'), FORCE = flag('--force');
 
