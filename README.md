@@ -18,19 +18,23 @@
 
 ```mermaid
 flowchart LR
-    A["ALIO"] --> B["수집"]
-    B --> C["변환"]
-    C --> D["OCR 보정"]
-    D --> E["기관별 Markdown"]
+    A["ALIO 상세페이지"] --> B["Crawl4AI"]
+    B --> C["원문·첨부파일"]
+    C --> D["kordoc"]
+    D -->|실패 시| E["markitdown"]
+    E -->|OCR 필요 시| F["PaddleOCR"]
+    D --> G["기관별 Markdown"]
+    E --> G
+    F --> G
 ```
 
-| 구간 | 구성요소 | 처리 내용 |
+| 구성요소 | 역할 | 비고 |
 |---|---|---|
-| 수집 | **Crawl4AI** | ALIO 상세페이지의 본문·표·첨부파일 수집 |
-| 1차 변환 | **kordoc** | HWP/HWPX/PDF/XLSX/DOCX를 Markdown으로 변환 |
-| 보조 변환 | **markitdown** | kordoc 변환 실패 시 fallback 처리 |
-| OCR 보정 | **PaddleOCR** | 스캔 PDF 등 텍스트 추출 실패 문서 처리 |
-| 산출 | **Markdown** | 기관별 `.md` 파일 생성 |
+| **Crawl4AI** | ALIO 본문·표·첨부파일 수집 | 외부 서비스 |
+| **kordoc** | HWP/HWPX/PDF/XLSX/DOCX 1차 변환 | npm 의존성으로 내장 |
+| **markitdown** | 변환 실패 시 보조 변환 | fallback |
+| **PaddleOCR** | 스캔 PDF OCR 처리 | 외부 서비스 |
+| **Markdown** | 기관별 `.md` 산출물 생성 | 최종 결과물 |
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
 - **Crawl4AI**(ALIO 본문 표)와 **PaddleOCR**(스캔 PDF)은 외부 서비스로, 풀스택 프로필의 docker compose에 포함되어 있습니다.
