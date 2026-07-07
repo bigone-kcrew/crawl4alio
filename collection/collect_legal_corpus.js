@@ -57,6 +57,7 @@ const ONLY_CAT        = argVal('--category');
 const RETRY_FAILED    = args.includes('--retry-failed');
 const REFETCH_LAWGOV  = args.includes('--refetch-lawgov');
 const REFETCH_ALIO    = args.includes('--refetch-alio');
+const NO_ANNEX        = args.includes('--no-annex'); // 별표·서식(붙임) 수집 생략
 
 function argVal(flag) {
   const i = args.indexOf(flag);
@@ -335,6 +336,79 @@ function admRulJsonToMarkdown(data) {
   return md.trim();
 }
 
+// ── 별표·서식(붙임) 수집 ──────────────────────────────────────────────────────
+// 법령 JSON의 별표단위에는 본문 텍스트(별표내용)가 인라인으로 포함되고,
+// 원본 파일은 /LSW/flDownload.do 링크(별표서식파일링크=HWP, 별표서식PDF파일링크=PDF)로 제공됨.
+
+function sanitizeFileSegment(value) {
+  return String(value || '').replace(/[\/\\:*?"<>|\n\r\t]/g, '_').trim().slice(0, 80);
+}
+
+function extractAnnexUnits(data) {
+  const root = data['법령'] || data['AdmRulService'] || {};
+  const annex = root['별표'];
+  if (!annex) return [];
+  const units = annex['별표단위'];
+  if (!units) return [];
+  return Array.isArray(units) ? units : [units];
+}
+
+// 별표내용(중첩 문자열 배열)을 평탄화해 줄 단위로 반환
+function annexTextLines(unit) {
+  const lines = [];
+  (function walk(v) {
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (v === null || v === undefined) return;
+    String(v).split('\n').forEach(line => lines.push(line.replace(/\s+$/, '')));
+  })(unit['별표내용']);
+  while (lines.length && !lines[0]) lines.shift();
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  return lines;
+}
+
+async function collectAnnexes(data, annexDir) {
+  const units = extractAnnexUnits(data);
+  if (!units.length) return { section: '', files: [], warnings: [] };
+
+  const files = [];
+  const warnings = [];
+  let section = '\n\n---\n\n## 별표·서식\n\n';
+
+  for (const unit of units) {
+    const no = String(unit['별표번호'] || '').replace(/^0+/, '') || '?';
+    const title = String(unit['별표제목'] || '').trim();
+    section += `### 별표 ${no}. ${title}\n\n`;
+
+    const lines = annexTextLines(unit);
+    if (lines.length) section += '```\n' + lines.join('\n') + '\n```\n\n';
+
+    // 원본 파일: HWP 우선, 없으면 PDF (첫 성공 포맷만 저장)
+    const linkCandidates = [
+      ['별표서식파일링크', 'hwp'],
+      ['별표서식PDF파일링크', 'pdf'],
+    ];
+    for (const [key, ext] of linkCandidates) {
+      const link = String(unit[key] || '').trim();
+      if (!link) continue;
+      const url = link.startsWith('http') ? link : `https://www.law.go.kr${link}`;
+      const fileName = `별표${sanitizeFileSegment(unit['별표번호'] || no)}_${sanitizeFileSegment(title) || '무제'}.${ext}`;
+      try {
+        const dl = await httpGet(url);
+        if (dl.status !== 200 || !dl.body?.length) throw new Error(`HTTP ${dl.status}`);
+        fs.mkdirSync(annexDir, { recursive: true });
+        fs.writeFileSync(path.join(annexDir, fileName), dl.body);
+        files.push({ no, title, ext, file: fileName });
+        break;
+      } catch (e) {
+        warnings.push(`별표 ${no} ${ext} 다운로드 실패: ${e.message}`);
+      }
+    }
+    await sleep(300);
+  }
+
+  return { section, files, warnings };
+}
+
 async function fetchLawGovDRF(source) {
   const url = source.source_url;
 
@@ -349,6 +423,7 @@ async function fetchLawGovDRF(source) {
       parserUsed:   'drf-law-json',
       effectiveDate: String(bi['시행일자'] || ''),
       amendedAt:    String(bi['공포일자'] || ''),
+      rawJson:      data,
     };
   }
 
@@ -363,6 +438,7 @@ async function fetchLawGovDRF(source) {
       parserUsed:   'drf-admrul-json',
       effectiveDate: String(bi['시행일자'] || ''),
       amendedAt:    String(bi['발령일자'] || ''),
+      rawJson:      data,
     };
   }
 
@@ -572,6 +648,19 @@ async function processSource(source) {
       if (markdown.length < MIN_MD_CHARS)
         throw new Error(`DRF 마크다운 너무 짧음 (${markdown.length}자)`);
       log('OK', `${source.id} DRF 완료 (${markdown.length}자)`);
+
+      // DRF 원본 JSON을 raw로 보존 (원문 파일 1차 보존)
+      fs.mkdirSync(path.dirname(rawBasePath), { recursive: true });
+      fs.writeFileSync(`${rawBasePath}.json`, JSON.stringify(result.rawJson, null, 2));
+
+      // 별표·서식(붙임) — 실패해도 소스 수집은 성공 처리 (warnings로 기록)
+      if (!NO_ANNEX) {
+        const annex = await collectAnnexes(result.rawJson, `${rawBasePath}_annex`);
+        if (annex.section) markdown += annex.section;
+        extra.annexFiles = annex.files;
+        if (annex.files.length) log('ANNEX', `${source.id}: 별표·서식 ${annex.files.length}건 저장`);
+        for (const w of annex.warnings) log('AWRN', `${source.id}: ${w}`);
+      }
     } catch (err) {
       log('ERR', `${source.id} DRF 실패: ${err.message}`);
       updateManifest(source.id, 'failed', err.message);
@@ -641,6 +730,10 @@ function updateManifest(id, status, failureReason = '', parserUsed = '', extra =
   if (parserUsed)          src.parser_used    = parserUsed;
   if (extra.effectiveDate) src.effective_date = extra.effectiveDate;
   if (extra.amendedAt)     src.amended_at     = extra.amendedAt;
+  if (extra.annexFiles) {
+    src.annex_count = extra.annexFiles.length;
+    src.annex_files = extra.annexFiles;
+  }
   manifest.generated_at = new Date().toISOString().slice(0, 10);
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
 }
