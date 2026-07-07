@@ -28,13 +28,42 @@ flowchart LR
     F --> G
 ```
 
-| 구성요소 | 역할 | 비고 |
-|---|---|---|
-| **Crawl4AI** | ALIO 상세페이지의 본문·표·첨부파일을 수집하고 원문 구조를 보존합니다. | 외부 서비스 |
-| **kordoc** | HWP/HWPX/PDF/XLSX/DOCX 파일을 Markdown으로 1차 변환합니다. | npm 의존성으로 내장 |
-| **markitdown** | kordoc 변환 실패 시 대체 변환을 수행하는 fallback 경로입니다. | 보조 변환 |
-| **PaddleOCR** | 스캔 PDF처럼 텍스트 추출이 어려운 문서를 OCR로 보정합니다. | 외부 서비스 |
-| **Markdown** | 기관별 최종 `.md` 산출물을 생성해 검색·비교·동기화에 사용합니다. | 최종 결과물 |
+<table width="100%">
+  <thead>
+    <tr>
+      <th align="left">구성요소</th>
+      <th align="left">역할</th>
+      <th align="left">비고</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Crawl4AI</strong></td>
+      <td>ALIO 상세페이지의 본문·표·첨부파일을 수집합니다.</td>
+      <td>외부 서비스</td>
+    </tr>
+    <tr>
+      <td><strong>kordoc</strong></td>
+      <td>HWP/HWPX/PDF/XLSX/DOCX 파일을 Markdown으로 1차 변환합니다.</td>
+      <td>npm 의존성으로 내장</td>
+    </tr>
+    <tr>
+      <td><strong>markitdown</strong></td>
+      <td>kordoc 변환 실패 시 대체 변환을 수행합니다.</td>
+      <td>fallback</td>
+    </tr>
+    <tr>
+      <td><strong>PaddleOCR</strong></td>
+      <td>스캔 PDF처럼 텍스트 추출이 어려운 문서를 OCR로 보정합니다.</td>
+      <td>외부 서비스</td>
+    </tr>
+    <tr>
+      <td><strong>Markdown</strong></td>
+      <td>기관별 최종 <code>.md</code> 산출물을 생성합니다.</td>
+      <td>최종 결과물</td>
+    </tr>
+  </tbody>
+</table>
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
 - **Crawl4AI**(ALIO 본문 표)와 **PaddleOCR**(스캔 PDF)은 외부 서비스로, 풀스택 프로필의 docker compose에 포함되어 있습니다.
