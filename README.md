@@ -30,7 +30,7 @@ flowchart LR
 
 수집은 **Crawl4AI**가 담당합니다. ALIO 상세페이지의 본문, 표, 첨부파일을 가져와 `content.json`, `content.md`, 원본 첨부파일 형태로 정리합니다.
 
-문서 변환은 **kordoc → markitdown → PaddleOCR** 순서의 fallback 체인으로 처리합니다. `kordoc`은 HWP/HWPX/PDF/XLSX/DOCX 변환을 담당하며 npm 의존성으로 내장되어 별도 서버 없이 동작합니다. `markitdown`은 kordoc 변환 실패 시 보조 변환을 수행하고, `PaddleOCR`은 스캔 PDF처럼 텍스트 추출이 어려운 문서를 OCR로 보정합니다.
+문서 변환은 **kordoc → markitdown → PaddleOCR** 순서의 fallback 체인으로 처리합니다. `kordoc`은 HWP/HWPX/PDF/XLSX/DOCX 변환을 담당하며, `markitdown`은 kordoc 변환 실패 시 보조 변환을 수행하고, `PaddleOCR`은 스캔 PDF처럼 텍스트 추출이 어려운 문서를 OCR로 보정합니다.
 
 최종 산출물은 기관별 Markdown 파일입니다. 이후 저장본 비교, 신규·누락 공시 탐지, 법령·행정규칙 동기화, 검색 기반 분석에 활용됩니다.
 
