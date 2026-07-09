@@ -22,9 +22,10 @@
 
 'use strict';
 
-const fs   = require('fs');
-const path = require('path');
-const yaml = require('js-yaml');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
+const yaml   = require('js-yaml');
 
 // stdout 파이프 끊김 시 프로세스가 종료되지 않도록 SIGPIPE 무시
 process.on('SIGPIPE', () => {});
@@ -84,6 +85,7 @@ const STRUCTURED_DIR   = path.join(ROOT, 'data', 'structured_data');
 const INDEX_PATH       = path.join(STRUCTURED_DIR, 'download_files_index.json');
 const CHECKPOINT_PATH  = path.join(ROOT, 'data', 'logs', 'conversion_checkpoint.json');
 const OCR_NEEDED_PATH  = path.join(ROOT, 'data', 'logs', 'ocr_needed.json');
+const HASH_CACHE_PATH  = path.join(ROOT, 'data', 'logs', 'file_hash_cache.json');
 
 // MD 미러 출력 루트 (raw/md 트리 분리 배포용).
 // 미지정 시 기존 동작(원본 파일 옆에 .md 저장) 유지.
@@ -140,6 +142,23 @@ function loadCheckpoint() {
 function saveCheckpoint(ckpt) {
   ckpt.last_updated = new Date().toISOString();
   fs.writeFileSync(CHECKPOINT_PATH, JSON.stringify(ckpt, null, 2));
+}
+
+// ── 파일 해시 캐시 (동일 파일 중복 파싱 방지) ──────────────────────────────────
+
+const hashCache = new Map(); // md5 → outputPath
+
+function loadHashCache() {
+  if (RESET_CKP || !fs.existsSync(HASH_CACHE_PATH)) return;
+  try {
+    const obj = JSON.parse(fs.readFileSync(HASH_CACHE_PATH, 'utf8'));
+    for (const [k, v] of Object.entries(obj)) hashCache.set(k, v);
+    console.log(`[HASH_CACHE] ${hashCache.size}개 기존 해시 로드`);
+  } catch {}
+}
+
+function saveHashCache() {
+  fs.writeFileSync(HASH_CACHE_PATH, JSON.stringify(Object.fromEntries(hashCache)));
 }
 
 // ── 동시 실행 풀 ────────────────────────────────────────────────────────────────
@@ -236,6 +255,25 @@ async function convertFile(entry, ckpt) {
     return;
   }
 
+  // ── 해시 캐시: 동일 파일 내용이면 파서 호출 없이 md 복사 ─────────────────────
+  let fileHash;
+  try {
+    fileHash = crypto.createHash('md5').update(fs.readFileSync(absPath)).digest('hex');
+    const cachedMd = hashCache.get(fileHash);
+    if (cachedMd && fs.existsSync(cachedMd)) {
+      const existing = fs.readFileSync(cachedMd, 'utf8');
+      const bodyMatch = existing.match(/^---[\s\S]*?---\n\n?([\s\S]*)$/);
+      const body = bodyMatch ? bodyMatch[1] : existing;
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, buildFrontmatter(meta, 'hash_reuse') + body, 'utf8');
+      ckpt.files[id] = { status: 'success', parser: 'hash_reuse', output: outputPath,
+                          source_hash: fileHash, processed_at: new Date().toISOString() };
+      ckpt.success++;
+      log(id, 'HASH_REUSE', fileHash.slice(0, 8));
+      return;
+    }
+  } catch { /* 파일 없거나 해시 실패 → 일반 처리 */ }
+
   let usedParser = null;
   let markdown   = null;
   let lastError  = null;
@@ -303,6 +341,7 @@ async function convertFile(entry, ckpt) {
     ckpt.files[id] = { status: 'success', parser: usedParser, output: outputPath, processed_at: now };
     ckpt.success++;
     log(id, `OK(${usedParser})`, '');
+    if (fileHash) hashCache.set(fileHash, outputPath);
   } else if (needsOcr) {
     ckpt.files[id] = { status: 'ocr_needed', reason: lastError, file_path: absPath, processed_at: now };
     ckpt.ocr_needed = (ckpt.ocr_needed || 0) + 1;
@@ -342,6 +381,7 @@ async function main() {
   console.log(`변환 대상: ${allFiles.length}개`);
 
   const ckpt       = loadCheckpoint();
+  loadHashCache();
   const pending    = allFiles.filter(f => !ckpt.files[f.id]);
   const alreadyDone = allFiles.length - pending.length;
   console.log(`기처리: ${alreadyDone} / 미처리: ${pending.length}\n`);
@@ -377,16 +417,19 @@ async function main() {
   ]);
 
   saveCheckpoint(ckpt);
+  saveHashCache();
   saveOcrNeededList(ckpt);
 
   const vals      = Object.values(ckpt.files);
   const success   = vals.filter(v => v.status === 'success').length;
   const failed    = vals.filter(v => v.status === 'failed').length;
   const ocrNeeded = vals.filter(v => v.status === 'ocr_needed').length;
+  const hashReused = vals.filter(v => v.parser === 'hash_reuse').length;
 
   console.log('\n=== 완료 ===');
   console.log(`전체(누적):  ${vals.length}`);
   console.log(`성공:       ${success}`);
+  console.log(`해시 재사용: ${hashReused}`);
   console.log(`실패:       ${failed}`);
   console.log(`OCR 필요:   ${ocrNeeded}  →  ${OCR_NEEDED_PATH}`);
   console.log(`체크포인트: ${CHECKPOINT_PATH}`);
