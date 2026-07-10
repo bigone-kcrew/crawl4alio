@@ -8,11 +8,12 @@
 
 ## 무엇을 할 수 있나요
 
-1. **ALIO 경영공시 수집** — 355개 공공기관 × 전체 92개 공시항목(정기/수시 자동 구분). 공시항목(`--scope all|--categories|--items`)과 기관(`--ministry|--apba-ids|--inst-type`)을 자유롭게 선택
-2. **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락 공시만 수집 (`sync_alio.js`: 반자동 report / 자동 apply, `sync_legal.js`: 법령 개정 감지)
-3. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), 그 외 부처 지침은 크롤링+변환
-4. **기관 내부규정 수집** — ALIO `21110` 게시판에서 기관별 규정 수집 (최신본 또는 `--all-files`로 개정 이력 전체)
-5. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환. ZIP 자동 해제(`extract_zips.js`), raw/md 미러 출력(`--md-root`) 지원
+1. **ALIO 경영공시 수집** — 355개 공공기관 × 전체 92개 공시항목(정기/수시 자동 구분). 공시항목(`--scope all|--categories|--items`)과 기관(`--ministry|--apba-ids|--inst-type`)을 자유롭게 선택. 본문 가치 없는 문서첨부형 항목은 `--attach-only-items`로 crawl4ai 스킵(첨부만 수집, 대량 항목 대폭 가속)
+2. **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 항목 전담(`collect_board_disclosures.js`): **국회 지적사항(B1210)·감사원 등 지적(B1220)**은 본문(`내용.md`)+첨부, **경영평가결과(B1230/B1250)**는 첨부 수집
+3. **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락 공시만 수집 (`sync_alio.js`: 반자동 report / 자동 apply, `sync_legal.js`: 법령 개정 감지). 다운로더는 disclosureNo **report 체크포인트**로 raw를 오프사이트로 옮겨 삭제한 뒤에도 증분 수집 가능
+4. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), 그 외 부처 지침은 크롤링+변환
+5. **기관 내부규정 수집** — ALIO `21110` 게시판에서 기관별 규정 수집 (최신본 또는 `--all-files`로 개정 이력 전체)
+6. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환. ZIP 자동 해제(`extract_zips.js`), raw/md 미러 출력(`--md-root`) 지원
 
 ## 아키텍처
 
@@ -36,6 +37,17 @@ flowchart LR
 
 - **kordoc**(https://github.com/chrisryugj/kordoc)은 npm 의존성으로 **내장**되어 서버 없이 동작합니다 (HWP3/5·HWPX·PDF·XLS(X)·DOCX).
 - **Crawl4AI**(ALIO 본문 표)와 **PaddleOCR**(스캔 PDF)은 외부 서비스로, 풀스택 프로필의 docker compose에 포함되어 있습니다.
+
+## 성능·안정성 (v1.2~1.3)
+
+대규모 수집(수만 report·수십만 첨부) 실전에서 다듬은 사항:
+
+- **병렬화 + 전역 요청 상한**: 채용은 게시글/파일 병렬, 다운로더는 report당 호출·첨부 병렬. 실제 서버 요청은 전역 세마포어로 상한(중첩 곱셈 방지). 대량 수집은 기관 샤딩(`--apba-ids` 분할 다중 프로세스)으로 병렬, 이때 `SKIP_STRUCTURED_INDEX=1`로 공유 인덱스 race 회피.
+- **첨부전용 모드**(`--attach-only-items`): 본문이 메타데이터뿐인 문서첨부형 항목(이사회·감사보고서 등)은 crawl4ai를 건너뛰고 첨부만 수집 → crawl4ai 병목 대폭 완화. 본문 유무는 항목별로 실측 판단 필요(재무제표처럼 본문 표가 있는 항목은 유지).
+- **report 체크포인트**(`data/logs/download_ckpt.json`): disclosureNo 기준으로 이미 수집한 report를 raw 유무와 무관하게 스킵 → raw 오프사이트 아카이브 후 로컬 삭제해도 증분 수집. `--recheck`로 강제 재처리, `--ckpt`로 경로 지정. 채용/게시판은 이미 posting-level 체크포인트(`formNo:apbaId:idx`+idate).
+- **안정성 수정**: 체크포인트 atomic write(tmp→rename) race 방지 / 게시판형(disclosureNo=0000) 목록이 기관당 1건으로 접히던 dedup 버그(→ `disclosureNo|idx` 키) / 긴 한글 파일명 ENAMETOOLONG(바이트 절단 + 단건 오류 격리) / alio keep-alive 종료 socket hang up 재시도(Connection: close).
+
+> **참고**: ALIO 상세 데이터(감사·이사회·재무 등 대부분)는 여전히 crawl4ai로 수집합니다. `opendata.alio.go.kr` / data.go.kr 오픈API는 채용·시설·사업·기관 4종 정보만 제공하므로 전체 공시 대체가 되지 않습니다.
 
 ## 설치 프로필
 
@@ -68,7 +80,11 @@ cd deploy && docker compose up -d && cd ..
 # 1. ALIO 경영공시 수집 — 항목·기관 선택 가능
 node collection/download_documents_advanced.js --print-scope          # 수집 범위 미리보기
 node collection/download_documents_advanced.js --categories 노동조합   # 예: 노동조합 관련 항목만
+node collection/download_documents_advanced.js --items 43005,43006 --attach-only-items 43005,43006  # 이사회·감사(문서첨부형): crawl4ai 스킵
 npm run collect:alio                                                  # yaml 설정 기준
+
+# 1-2. 게시판형 공시(국회/감사원 지적·경영평가) — 일반 다운로더가 스킵하는 항목
+node collection/collect_board_disclosures.js --forms B1210,B1220,B1230 --years 3
 
 # 2. 파일 인덱스 → Markdown 변환 → (스캔 문서) OCR
 npm run build:file-index
@@ -87,7 +103,10 @@ node collection/sync_alio.js --mode=apply   # 감지 즉시 자동 수집
 ```
 crawl4alio/
 ├── collection/                  # 수집·변환 스크립트
-│   ├── download_documents_advanced.js   # ALIO 경영공시 메인 크롤러
+│   ├── download_documents_advanced.js   # ALIO 경영공시 메인 크롤러 (첨부전용·report 체크포인트)
+│   ├── collect_board_disclosures.js     # 게시판형 공시 수집 (국회/감사원 지적·경영평가)
+│   ├── collect_recruit_attachments.js   # 채용공고 첨부 수집 (게시글/파일 병렬)
+│   ├── rebuild_recruit_checkpoint.js    # 파일시스템 기반 채용 체크포인트 복구
 │   ├── download_statistics.js           # ALIO 통계 엑셀 다운로드
 │   ├── check_disclosure_recency.js      # 신규 공시 모니터링
 │   ├── download_susi_documents.js       # 수시공시 수집
