@@ -11,6 +11,7 @@
     "collect:statistics": "node collection/download_statistics.js",
     "collect:legal": "node collection/collect_legal_corpus.js",
     "collect:bylaws": "node collection/collect_institution_bylaws.js",
+    "collect:recruit": "node collection/collect_recruit_attachments.js",
     "sync:alio": "node collection/sync_alio.js",
     "sync:legal": "node collection/sync_legal.js",
     "legal:add": "node collection/add_legal_source.js",
@@ -23,7 +24,8 @@
     "enrich:legal-ministry": "node collection/enrich_legal_ministry.js",
     "extract:zips": "node collection/extract_zips.js",
     "build:file-index": "node collection/build_download_file_index.js",
-    "ocr:markdown": "node ocrtomarkdown/ocr-to-markdown.js"
+    "ocr:markdown": "node ocrtomarkdown/ocr-to-markdown.js",
+    "postprocess:ocr": "node collection/postprocess_ocr_md.js"
   },
   "dependencies": {
     "axios": "^1.16.1",
