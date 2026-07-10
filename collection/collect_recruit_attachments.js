@@ -54,6 +54,15 @@ const CATEGORY_KEYWORDS = [
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// 파일명 세그먼트를 UTF-8 바이트 기준으로 절단 (한글 3바이트 → 글자수 slice로는 255바이트 한계 초과 위험).
+function truncateBytes(str, maxBytes) {
+    const buf = Buffer.from(str, 'utf8');
+    if (buf.length <= maxBytes) return str;
+    let s = buf.subarray(0, maxBytes).toString('utf8');
+    if (s.endsWith('�')) s = s.slice(0, -1); // 잘린 멀티바이트 문자 제거
+    return s;
+}
+
 // 최대 limit개를 동시에 실행하며 items를 순회한다.
 async function runPool(items, limit, worker) {
     const executing = new Set();
@@ -359,7 +368,8 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
         }
 
         const year = String(row.idate || '').slice(0, 4) || 'unknown';
-        const postFolder = sanitizeSegment(String(row.title || `idx_${row.idx}`)).slice(0, 120);
+        // 파일시스템 파일명 한계(≈255바이트) 대비 200바이트로 절단 (한글 안전)
+        const postFolder = truncateBytes(sanitizeSegment(String(row.title || `idx_${row.idx}`)), 200);
         const postDir = path.join(args.out, getInstitutionFolderName(inst), cfg.scdFolder, year, postFolder);
 
         const manifest = {
@@ -417,8 +427,16 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
         totals.postings += 1;
     };
 
-    // 게시글 병렬 처리 (실제 alio 요청은 alioSem이 전역 제한)
-    await runPool(scoped, POSTING_CONCURRENCY, processPosting);
+    // 게시글 병렬 처리 (실제 alio 요청은 alioSem이 전역 제한).
+    // 단일 게시글 오류(ENAMETOOLONG 등)가 런 전체를 중단시키지 않도록 개별 격리.
+    await runPool(scoped, POSTING_CONCURRENCY, async (row) => {
+        try {
+            await processPosting(row);
+        } catch (err) {
+            logger.error(`${inst.name}(${formNo}) idx=${row.idx}: 게시글 처리 실패 — ${err.message}`);
+            totals.errors += 1;
+        }
+    });
 }
 
 async function main() {
