@@ -294,15 +294,20 @@ async function downloadDocuments() {
 
                 logger.info(`Processing: ${inst.name} - ${report.report_form_root_no}`);
                 const detailUrl = `https://www.alio.go.kr/item/itemReportTerm.do?apbaId=${inst.apba_id}&reportFormRootNo=${report.report_form_root_no}&disclosureNo=${report.disclosure_no}`;
-                const crawlResult = await scrapeWithCrawl4AI(detailUrl);
+                const reportUrl = `https://www.alio.go.kr/item/itemReport.do?seq=${report.disclosure_no}&disclosureNo=${report.disclosure_no}`;
+
+                // 서로 독립적인 3개 네트워크 호출을 병렬 실행 (report당 ~8s 병목의 대부분).
+                // 각 함수는 내부 try/catch로 실패 시 null/'' 반환 → Promise.all이 reject되지 않음.
+                const [crawlResult, pdfJson, reportHtml] = await Promise.all([
+                    scrapeWithCrawl4AI(detailUrl),
+                    fetchPdfJson(report.disclosure_no),
+                    fetchHtml(reportUrl)
+                ]);
                 if (!crawlResult || !hasMeaningfulOutput(crawlResult)) {
                     logger.info(`Skipping ${report.disclosure_no}: no Crawl4AI output.`);
                     continue;
                 }
 
-                const pdfJson = await fetchPdfJson(report.disclosure_no);
-                const reportUrl = `https://www.alio.go.kr/item/itemReport.do?seq=${report.disclosure_no}&disclosureNo=${report.disclosure_no}`;
-                const reportHtml = await fetchHtml(reportUrl);
                 const reportAttachmentContext = extractReportAttachments({ reportHtml, disclosureNo: report.disclosure_no });
                 const docHtml = reportAttachmentContext.docPath ? await fetchHtml(`https://www.alio.go.kr${reportAttachmentContext.docPath}`) : '';
                 const reportAttachments = extractReportAttachments({ reportHtml, docHtml, disclosureNo: report.disclosure_no });
