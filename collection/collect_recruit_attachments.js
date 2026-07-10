@@ -182,17 +182,28 @@ async function downloadFile(fileNo, destPath) {
     return fs.statSync(destPath).size;
 }
 
-// 같은 폴더 내 파일명 충돌 시 " (2)" 식 접미사. 빈 파일명은 fallback 적용
-function resolveCollision(dir, fileName) {
-    const base = fileName || 'file';
-    let candidate = base;
-    let n = 2;
-    while (fs.existsSync(path.join(dir, candidate))) {
-        const ext = path.extname(base);
-        candidate = `${path.basename(base, ext)} (${n})${ext}`;
-        n += 1;
+// fileNo → 다운로드된 절대경로. 같은 fileNo는 재다운로드 없이 복사.
+const fileNoCache = new Map();
+
+// destPath에 파일을 확보한다. 반환값: { action: 'downloaded'|'copied'|'skipped', size }
+async function acquireFile(fileNo, destPath) {
+    // fileNo 캐시 hit → 복사 (이미 다운로드된 파일 재사용)
+    if (fileNoCache.has(fileNo)) {
+        const src = fileNoCache.get(fileNo);
+        if (!fs.existsSync(destPath)) {
+            fs.copyFileSync(src, destPath);
+        }
+        return { action: 'copied', size: fs.statSync(destPath).size };
     }
-    return candidate;
+    // 파일명 충돌 (fileNo가 다른 파일) → 기존 유지, 캐시 등록
+    if (fs.existsSync(destPath)) {
+        fileNoCache.set(fileNo, destPath);
+        return { action: 'skipped', size: fs.statSync(destPath).size };
+    }
+    // 신규 다운로드
+    const size = await downloadFile(fileNo, destPath);
+    fileNoCache.set(fileNo, destPath);
+    return { action: 'downloaded', size };
 }
 
 // ── 체크포인트 ───────────────────────────────────────────────────
@@ -270,13 +281,13 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
                 }
                 try {
                     fs.mkdirSync(postDir, { recursive: true });
-                    const safeName = resolveCollision(postDir, sanitizeSegment(file.fileName));
-                    const size = await downloadFile(file.fileNo, path.join(postDir, safeName));
-                    manifest.downloaded[category].push({ file_no: file.fileNo, file_name: safeName, size });
+                    const safeName = sanitizeSegment(file.fileName) || 'file';
+                    const { action, size } = await acquireFile(file.fileNo, path.join(postDir, safeName));
+                    manifest.downloaded[category].push({ file_no: file.fileNo, file_name: safeName, size, action });
                     totals.files += 1;
                     totals.bytes += size;
                     downloadedAny = true;
-                    logger.info(`  ${category}: ${safeName} (${(size / 1024).toFixed(0)}KB)`);
+                    logger.info(`  ${category} [${action}]: ${safeName} (${(size / 1024).toFixed(0)}KB)`);
                 } catch (err) {
                     logger.error(`  다운로드 실패 fileNo=${file.fileNo} (${file.fileName}) — ${err.message}`);
                     totals.errors += 1;
