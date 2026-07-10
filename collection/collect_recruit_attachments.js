@@ -29,7 +29,9 @@ const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
 
 const ALIO_BASE = alioApi.ALIO_BASE || 'https://www.alio.go.kr';
 const ALL_CATEGORIES = ['공고문', '입사지원서', '직무기술서', '기타 첨부파일'];
-const REQUEST_DELAY_MS = 400;
+const REQUEST_DELAY_MS = Number(process.env.RECRUIT_DELAY_MS || 150);
+// 게시글 내 파일 동시 다운로드 수. redirect 오류 재발 시 낮출 것 (RECRUIT_FILE_CONCURRENCY=1)
+const FILE_CONCURRENCY = Number(process.env.RECRUIT_FILE_CONCURRENCY || 3);
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
 
 // 공시코드별 설정: 상세페이지 URL 경로, 기본 tableName, idxName
@@ -46,6 +48,17 @@ const CATEGORY_KEYWORDS = [
 ];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// 최대 limit개를 동시에 실행하며 items를 순회한다.
+async function runPool(items, limit, worker) {
+    const executing = new Set();
+    for (const item of items) {
+        const p = Promise.resolve().then(() => worker(item)).finally(() => executing.delete(p));
+        executing.add(p);
+        if (executing.size >= limit) await Promise.race(executing);
+    }
+    await Promise.all(executing);
+}
 
 function parseArgs(argv) {
     const args = {
@@ -184,17 +197,37 @@ async function downloadFile(fileNo, destPath) {
 
 // fileNo → 다운로드된 절대경로. 같은 fileNo는 재다운로드 없이 복사.
 const fileNoCache = new Map();
+// 동시 실행 중 중복 방지용 in-flight 맵 (같은 fileNo/같은 destPath 동시 접근 직렬화)
+const fileNoInflight = new Map();
+const pathInflight = new Map();
 
-// destPath에 파일을 확보한다. 반환값: { action: 'downloaded'|'copied'|'skipped', size }
+function copyFromCache(fileNo, destPath) {
+    const src = fileNoCache.get(fileNo);
+    if (!fs.existsSync(destPath)) fs.copyFileSync(src, destPath);
+    return { action: 'copied', size: fs.statSync(destPath).size };
+}
+
+// destPath에 파일을 확보한다. 반환값: { action: 'downloaded'|'copied'|'skipped'|'alt', size }
+// 동시 다운로드(FILE_CONCURRENCY>1)에서도 안전: fileNo/destPath in-flight 맵으로 중복·경합 차단.
 async function acquireFile(fileNo, destPath) {
-    // fileNo 캐시 hit → 복사 (이미 다운로드된 파일 재사용)
-    if (fileNoCache.has(fileNo)) {
-        const src = fileNoCache.get(fileNo);
-        if (!fs.existsSync(destPath)) {
-            fs.copyFileSync(src, destPath);
-        }
-        return { action: 'copied', size: fs.statSync(destPath).size };
+    if (fileNoCache.has(fileNo)) return copyFromCache(fileNo, destPath);
+    // 같은 fileNo 다운로드가 진행 중 → 완료 대기 후 캐시에서 복사
+    if (fileNoInflight.has(fileNo)) {
+        await fileNoInflight.get(fileNo).catch(() => {});
+        if (fileNoCache.has(fileNo)) return copyFromCache(fileNo, destPath);
     }
+    // 같은 destPath 처리가 진행 중이면 직렬화 (크기 비교/_alt 로직 경합 방지)
+    while (pathInflight.has(destPath)) {
+        await pathInflight.get(destPath).catch(() => {});
+    }
+    const work = _acquireCore(fileNo, destPath);
+    fileNoInflight.set(fileNo, work);
+    pathInflight.set(destPath, work);
+    try { return await work; }
+    finally { fileNoInflight.delete(fileNo); pathInflight.delete(destPath); }
+}
+
+async function _acquireCore(fileNo, destPath) {
     // 파일명 충돌 (fileNo가 다른 파일) → 크기 비교
     if (fs.existsSync(destPath)) {
         const existingSize = fs.statSync(destPath).size;
@@ -300,17 +333,23 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
         };
 
         let downloadedAny = false;
+        // 처리할 파일을 카테고리별로 평탄화 (동시 다운로드용)
+        const workItems = [];
         for (const category of args.categories) {
             const files = sections[category];
             if (!files) continue;
             manifest.downloaded[category] = [];
-            for (const file of files) {
-                if (args.dryRun) {
-                    logger.info(`  [DRY] ${category}: ${file.fileName} (fileNo=${file.fileNo})`);
-                    continue;
-                }
+            for (const file of files) workItems.push({ category, file });
+        }
+
+        if (args.dryRun) {
+            for (const { category, file } of workItems) {
+                logger.info(`  [DRY] ${category}: ${file.fileName} (fileNo=${file.fileNo})`);
+            }
+        } else if (workItems.length) {
+            fs.mkdirSync(postDir, { recursive: true });
+            await runPool(workItems, FILE_CONCURRENCY, async ({ category, file }) => {
                 try {
-                    fs.mkdirSync(postDir, { recursive: true });
                     const safeName = sanitizeSegment(file.fileName) || 'file';
                     const { action, size } = await acquireFile(file.fileNo, path.join(postDir, safeName));
                     manifest.downloaded[category].push({ file_no: file.fileNo, file_name: safeName, size, action });
@@ -323,7 +362,7 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
                     totals.errors += 1;
                 }
                 await sleep(REQUEST_DELAY_MS);
-            }
+            });
         }
 
         if (!args.dryRun && downloadedAny) {
@@ -367,4 +406,8 @@ async function main() {
     logger.info(`완료: 게시글 ${totals.postings}건 처리 (스킵 ${totals.skipped}) / 파일 ${totals.files}건 ${(totals.bytes / 1e6).toFixed(1)}MB / 오류 ${totals.errors}건`);
 }
 
-main().catch(err => { logger.error(err.stack || err.message); process.exit(1); });
+if (require.main === module) {
+    main().catch(err => { logger.error(err.stack || err.message); process.exit(1); });
+} else {
+    module.exports = { runPool, acquireFile, fileNoCache };
+}
