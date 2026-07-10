@@ -71,6 +71,7 @@ function loadCheckpoint() {
 
 function saveCheckpoint(ckpt) {
     const tmp = CKPT_PATH + '.tmp';
+    fs.mkdirSync(path.dirname(CKPT_PATH), { recursive: true });
     fs.writeFileSync(tmp, JSON.stringify(ckpt, null, 2), 'utf8');
     fs.renameSync(tmp, CKPT_PATH);
 }
