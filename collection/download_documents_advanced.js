@@ -73,6 +73,7 @@ function parseArgs(argv) {
             case '--scope': args.scope = takeValue().trim(); break;
             case '--categories': args.categories = parseList(takeValue()); break;
             case '--items': args.items = parseList(takeValue()); break;
+            case '--attach-only-items': args.attachOnlyItems = new Set(parseList(takeValue())); break;
             case '--apba-ids': args.apbaIds = new Set(parseList(takeValue())); break;
             case '--inst-type': args.instType = takeValue().trim(); break;
             case '--print-scope': args.printScope = true; break;
@@ -137,11 +138,33 @@ async function scrapeWithCrawl4AI(url) {
     }
 }
 
+// socket hang up / ECONNRESET는 alio의 keep-alive 연결 종료 때문 — Connection: close + 재시도로 회피
+function isTransientNetErr(err) {
+    const m = (err && (err.code || err.message) || '').toString();
+    return /socket hang up|ECONNRESET|ETIMEDOUT|EPIPE|ECONNREFUSED|aborted/i.test(m);
+}
+async function getWithRetry(url, opts, retries = 3) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+        try {
+            return await axios.get(url, { ...opts, headers: { Connection: 'close', ...(opts && opts.headers) } });
+        } catch (err) {
+            lastErr = err;
+            if (attempt < retries && isTransientNetErr(err)) {
+                await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+                continue;
+            }
+            throw err;
+        }
+    }
+    throw lastErr;
+}
+
 async function fetchHtml(url) {
     if (!url) return '';
 
     try {
-        const response = await axios.get(url, { timeout: 30000 });
+        const response = await getWithRetry(url, { timeout: 30000 });
         return String(response.data || '');
     } catch (err) {
         logger.info(`HTML fetch failed for ${url}: ${err.message}`);
@@ -180,7 +203,7 @@ async function fetchPdfJson(disclosureNo) {
     if (!disclosureNo) return null;
 
     try {
-        const response = await axios.get('https://www.alio.go.kr/download/pdf.json', {
+        const response = await getWithRetry('https://www.alio.go.kr/download/pdf.json', {
             params: { disclosureNo },
             timeout: 20000
         });
@@ -222,7 +245,7 @@ async function downloadAttachment(att, yearDir) {
     }
     try {
         logger.info(`Downloading: ${att.name || att.file_name}`);
-        const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
+        const response = await getWithRetry(att.download_url, { responseType: 'stream', timeout: 60000 });
         const writer = fs.createWriteStream(filePath);
         response.data.pipe(writer);
         await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); response.data.on('error', reject); });
@@ -346,20 +369,33 @@ async function downloadDocuments() {
                 const disclosureKind = liveKind || item.disclosure_kind
                     || (alioApi.PERIODIC_SCDS.has(resolved.code) ? '정기' : '수시');
 
-                logger.info(`Processing: ${inst.name} - ${report.report_form_root_no}`);
+                // 첨부전용 항목(예: 이사회 43005): 본문 가치 없음 → crawl4ai 스킵, 첨부만 수집
+                const attachOnly = args.attachOnlyItems && args.attachOnlyItems.has(String(report.report_form_root_no || '').trim());
+
+                logger.info(`Processing: ${inst.name} - ${report.report_form_root_no}${attachOnly ? ' [attach-only]' : ''}`);
                 const detailUrl = `https://www.alio.go.kr/item/itemReportTerm.do?apbaId=${inst.apba_id}&reportFormRootNo=${report.report_form_root_no}&disclosureNo=${report.disclosure_no}`;
                 const reportUrl = `https://www.alio.go.kr/item/itemReport.do?seq=${report.disclosure_no}&disclosureNo=${report.disclosure_no}`;
 
-                // 서로 독립적인 3개 네트워크 호출을 병렬 실행 (report당 ~8s 병목의 대부분).
+                // 서로 독립적인 네트워크 호출을 병렬 실행 (report당 ~8s 병목의 대부분).
                 // 각 함수는 내부 try/catch로 실패 시 null/'' 반환 → Promise.all이 reject되지 않음.
-                const [crawlResult, pdfJson, reportHtml] = await Promise.all([
-                    scrapeWithCrawl4AI(detailUrl),
-                    fetchPdfJson(report.disclosure_no),
-                    fetchHtml(reportUrl)
-                ]);
-                if (!crawlResult || !hasMeaningfulOutput(crawlResult)) {
-                    logger.info(`Skipping ${report.disclosure_no}: no Crawl4AI output.`);
-                    continue;
+                let crawlResult, pdfJson, reportHtml;
+                if (attachOnly) {
+                    [pdfJson, reportHtml] = await Promise.all([
+                        fetchPdfJson(report.disclosure_no),
+                        fetchHtml(reportUrl)
+                    ]);
+                    // crawl4ai 스킵 → 하위 코드 null-safe용 빈 스텁 (content.md/sections.json 자동 생략)
+                    crawlResult = { sections: { headings: [], tocEntries: [] }, json: null, markdown: '', files: [] };
+                } else {
+                    [crawlResult, pdfJson, reportHtml] = await Promise.all([
+                        scrapeWithCrawl4AI(detailUrl),
+                        fetchPdfJson(report.disclosure_no),
+                        fetchHtml(reportUrl)
+                    ]);
+                    if (!crawlResult || !hasMeaningfulOutput(crawlResult)) {
+                        logger.info(`Skipping ${report.disclosure_no}: no Crawl4AI output.`);
+                        continue;
+                    }
                 }
 
                 const reportAttachmentContext = extractReportAttachments({ reportHtml, disclosureNo: report.disclosure_no });
