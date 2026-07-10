@@ -261,7 +261,12 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
 
     for (const row of scoped) {
         const key = `${formNo}:${inst.apba_id}:${row.idx}`;
-        if (ckpt.done[key]) { totals.skipped += 1; continue; }
+        if (ckpt.done[key]) {
+            // idate가 저장된 것과 같으면 스킵, 달라지면 재처리 (파일 교체 감지)
+            const saved = ckpt.done[key];
+            if (!saved.idate || saved.idate === (row.idate || '')) { totals.skipped += 1; continue; }
+            logger.info(`${inst.name}(${formNo}) idx=${row.idx}: idate 변경 감지 (${saved.idate} → ${row.idate}), 재처리`);
+        }
 
         const detailUrl = buildDetailUrl(row, formNo);
         let sections;
@@ -322,7 +327,7 @@ async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
             fs.writeFileSync(path.join(postDir, 'recruit_manifest.json'), JSON.stringify(manifest, null, 2));
         }
         if (!args.dryRun) {
-            ckpt.done[key] = { at: new Date().toISOString(), files: totals.files };
+            ckpt.done[key] = { at: new Date().toISOString(), files: totals.files, idate: row.idate || '' };
             saveCkpt(ckpt);
         }
         totals.postings += 1;
