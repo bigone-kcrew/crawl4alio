@@ -2,16 +2,16 @@
 'use strict';
 
 /**
- * B1020(임·직원 채용정보) 게시판 첨부파일 수집기
+ * B1020/B1010(임·직원 채용정보) 게시판 첨부파일 수집기
  *
- * 일반 공시와 달리 B1020은 게시판형(TTB_RECRUIT)이라 doc.html이 없고,
- * itemBoardB1020.do 상세페이지에 카테고리별(공고문/입사지원서/직무기술서/기타)
- * 첨부파일이 붙는다. 흐름:
- *   itemReportListSusi.json (idx 목록) → itemBoardB1020.do 상세 HTML 파싱
+ * B1020(TTB_RECRUIT)·B1010(COMM_BOARD) 모두 게시판형으로 doc.html이 없고,
+ * 각 itemBoardBXXXX.do 상세페이지에 첨부파일이 붙는다. 흐름:
+ *   itemReportListSusi.json (idx 목록) → itemBoardBXXXX.do 상세 HTML 파싱
  *   → download/download.json?fileNo= 다운로드
  *
  * Usage:
  *   node collection/collect_recruit_attachments.js [options]
+ *     --forms <목록>        공시코드 쉼표구분 (기본 "B1020,B1010")
  *     --years <N>          최근 N년만 수집 (기본 3)
  *     --categories <목록>   쉼표구분 (기본 "공고문,입사지원서,직무기술서")
  *     --apba <ID[,ID..]>   특정 기관만 (테스트용)
@@ -28,16 +28,28 @@ const { sanitizeSegment } = require(path.join(__dirname, 'project/crawler/utils/
 const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
 
 const ALIO_BASE = alioApi.ALIO_BASE || 'https://www.alio.go.kr';
-const REPORT_FORM_NO = 'B1020';
-const SCD_FOLDER = 'B1020_인력관리';
 const ALL_CATEGORIES = ['공고문', '입사지원서', '직무기술서', '기타 첨부파일'];
 const REQUEST_DELAY_MS = 400;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+
+// 공시코드별 설정: 상세페이지 URL 경로, 기본 tableName, idxName
+const FORM_CONFIG = {
+    B1020: { detailPath: '/item/itemBoardB1020.do', tableName: 'TTB_RECRUIT', idxName: 'IDX',      scdFolder: 'B1020_인력관리' },
+    B1010: { detailPath: '/item/itemBoardB1010.do', tableName: 'COMM_BOARD',  idxName: 'BOARD_NO', scdFolder: 'B1010_인력관리' },
+};
+
+// B1010 파일명 기반 카테고리 추론 키워드
+const CATEGORY_KEYWORDS = [
+    { category: '공고문',    patterns: [/공고문/, /공고/, /채용\s*공고/, /모집\s*공고/] },
+    { category: '입사지원서', patterns: [/입사\s*지원서/, /지원서/, /지원\s*서류/, /자기소개서/, /이력서/] },
+    { category: '직무기술서', patterns: [/직무\s*기술서/, /직무기술/, /NCS/, /직무\s*소개서/] },
+];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function parseArgs(argv) {
     const args = {
+        forms: ['B1020', 'B1010'],
         years: 3,
         categories: ['공고문', '입사지원서', '직무기술서'],
         apba: null,
@@ -49,6 +61,7 @@ function parseArgs(argv) {
         const arg = argv[i];
         const takeValue = () => argv[++i];
         switch (arg) {
+            case '--forms': args.forms = String(takeValue()).split(',').map(s => s.trim().toUpperCase()).filter(Boolean); break;
             case '--years': args.years = parseInt(takeValue(), 10) || 3; break;
             case '--categories': args.categories = String(takeValue()).split(',').map(s => s.trim()).filter(Boolean); break;
             case '--apba': args.apba = String(takeValue()).split(',').map(s => s.trim()).filter(Boolean); break;
@@ -67,8 +80,9 @@ function getInstitutionFolderName(inst) {
 }
 
 // ── 상세페이지 파싱 ──────────────────────────────────────────────
-// <th>카테고리</th> 구간별로 download.json?fileNo= 링크를 추출
-function parseAttachmentSections(html) {
+
+// B1020: <th>카테고리</th> 구간별로 fileNo 추출
+function parseAttachmentSections_B1020(html) {
     const result = {};
     const thRe = /<th[^>]*>\s*([^<]{1,30}?)\s*<\/th>/g;
     const ths = [];
@@ -95,18 +109,60 @@ function parseAttachmentSections(html) {
     return result;
 }
 
-function buildDetailUrl(row) {
+// B1010: 파일명에 [카테고리] 레이블이 있거나 키워드로 추론
+function inferCategory(fileName) {
+    // [카테고리] 형태
+    const bracket = fileName.match(/^\[([^\]]+)\]/);
+    if (bracket) {
+        const label = bracket[1].trim();
+        if (ALL_CATEGORIES.includes(label)) return label;
+    }
+    // 키워드 매칭
+    for (const { category, patterns } of CATEGORY_KEYWORDS) {
+        if (patterns.some(p => p.test(fileName))) return category;
+    }
+    return '기타 첨부파일';
+}
+
+function parseAttachmentSections_B1010(html) {
+    const result = {};
+    const fRe = /fileNo=(\d+)[^>]*>([^<]+)</g;
+    let fm;
+    const seen = new Set();
+    while ((fm = fRe.exec(html)) !== null) {
+        const fileNo = fm[1];
+        let fileName = fm[2].trim();
+        if (!fileName || seen.has(fileNo)) continue;
+        // 버튼/아이콘 텍스트 제외
+        if (/바로보기|다운로드|미리보기/.test(fileName)) continue;
+        seen.add(fileNo);
+        // [카테고리] 레이블을 파일명에서 제거하고 실제 파일명만 남김
+        const cleanName = fileName.replace(/^\[[^\]]+\]\s*/, '');
+        const category = inferCategory(fileName);
+        if (!result[category]) result[category] = [];
+        result[category].push({ fileNo, fileName: cleanName || fileName });
+    }
+    return result;
+}
+
+function parseAttachmentSections(html, formNo) {
+    if (formNo === 'B1010') return parseAttachmentSections_B1010(html);
+    return parseAttachmentSections_B1020(html);
+}
+
+function buildDetailUrl(row, formNo) {
+    const cfg = FORM_CONFIG[formNo] || FORM_CONFIG.B1020;
     const params = new URLSearchParams({
         disclosureNo: row.disclosureNo,
         apbaId: row.apbaId,
-        nowcode: REPORT_FORM_NO,
-        reportFormNo: row.reportFormNo || REPORT_FORM_NO,
-        table_name: row.tableName || 'TTB_RECRUIT',
-        idx_name: row.idxName || 'IDX',
+        nowcode: formNo,
+        reportFormNo: row.reportFormNo || formNo,
+        table_name: row.tableName || cfg.tableName,
+        idx_name: row.idxName || cfg.idxName,
         idx: row.idx,
         reportGbn: row.reportGbn || 'N'
     });
-    return `${ALIO_BASE}/item/itemBoardB1020.do?${params.toString()}`;
+    return `${ALIO_BASE}${cfg.detailPath}?${params.toString()}`;
 }
 
 async function fetchDetailHtml(url) {
@@ -149,6 +205,97 @@ function saveCkpt(ckpt) {
     fs.writeFileSync(ckptPath(), JSON.stringify(ckpt, null, 2));
 }
 
+async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
+    const cfg = FORM_CONFIG[formNo] || FORM_CONFIG.B1020;
+    let rows;
+    try {
+        rows = await alioApi.fetchReportRowsSusi(inst.apba_id, formNo, { delayMs: REQUEST_DELAY_MS });
+    } catch (err) {
+        logger.error(`${inst.name}(${formNo}): 목록 조회 실패 — ${err.message}`);
+        totals.errors += 1;
+        return;
+    }
+
+    let scoped = rows.filter(row => {
+        const y = parseInt(String(row.idate || row.openDate || '').slice(0, 4), 10);
+        return Number.isFinite(y) && y >= cutoffYear && row.idx;
+    });
+    if (args.limit > 0) scoped = scoped.slice(0, args.limit);
+    if (!scoped.length) return;
+
+    logger.info(`${inst.name}(${formNo}): 게시글 ${scoped.length}건 (${cutoffYear}년 이후)`);
+
+    for (const row of scoped) {
+        const key = `${formNo}:${inst.apba_id}:${row.idx}`;
+        if (ckpt.done[key]) { totals.skipped += 1; continue; }
+
+        const detailUrl = buildDetailUrl(row, formNo);
+        let sections;
+        try {
+            const html = await fetchDetailHtml(detailUrl);
+            sections = parseAttachmentSections(html, formNo);
+        } catch (err) {
+            logger.error(`${inst.name}(${formNo}) idx=${row.idx}: 상세 조회 실패 — ${err.message}`);
+            totals.errors += 1;
+            await sleep(REQUEST_DELAY_MS);
+            continue;
+        }
+
+        const year = String(row.idate || '').slice(0, 4) || 'unknown';
+        const postFolder = sanitizeSegment(String(row.title || `idx_${row.idx}`)).slice(0, 120);
+        const postDir = path.join(args.out, getInstitutionFolderName(inst), cfg.scdFolder, year, postFolder);
+
+        const manifest = {
+            form_no: formNo,
+            disclosure_no: row.disclosureNo,
+            idx: row.idx,
+            title: row.title || '',
+            idate: row.idate || '',
+            source_url: detailUrl,
+            collected_at: new Date().toISOString(),
+            available_categories: Object.keys(sections),
+            downloaded: {}
+        };
+
+        let downloadedAny = false;
+        for (const category of args.categories) {
+            const files = sections[category];
+            if (!files) continue;
+            manifest.downloaded[category] = [];
+            for (const file of files) {
+                if (args.dryRun) {
+                    logger.info(`  [DRY] ${category}: ${file.fileName} (fileNo=${file.fileNo})`);
+                    continue;
+                }
+                try {
+                    fs.mkdirSync(postDir, { recursive: true });
+                    const safeName = resolveCollision(postDir, sanitizeSegment(file.fileName));
+                    const size = await downloadFile(file.fileNo, path.join(postDir, safeName));
+                    manifest.downloaded[category].push({ file_no: file.fileNo, file_name: safeName, size });
+                    totals.files += 1;
+                    totals.bytes += size;
+                    downloadedAny = true;
+                    logger.info(`  ${category}: ${safeName} (${(size / 1024).toFixed(0)}KB)`);
+                } catch (err) {
+                    logger.error(`  다운로드 실패 fileNo=${file.fileNo} (${file.fileName}) — ${err.message}`);
+                    totals.errors += 1;
+                }
+                await sleep(REQUEST_DELAY_MS);
+            }
+        }
+
+        if (!args.dryRun && downloadedAny) {
+            fs.writeFileSync(path.join(postDir, 'recruit_manifest.json'), JSON.stringify(manifest, null, 2));
+        }
+        if (!args.dryRun) {
+            ckpt.done[key] = { at: new Date().toISOString(), files: totals.files };
+            saveCkpt(ckpt);
+        }
+        totals.postings += 1;
+        await sleep(REQUEST_DELAY_MS);
+    }
+}
+
 async function main() {
     const args = parseArgs(process.argv);
     const cutoffYear = new Date().getFullYear() - (args.years - 1);
@@ -158,98 +305,20 @@ async function main() {
         ? institutionsAll.filter(inst => args.apba.includes(inst.apba_id))
         : institutionsAll;
 
-    logger.info(`B1020 채용 첨부 수집 시작: 기관 ${institutions.length}개, ${cutoffYear}년 이후, 카테고리 [${args.categories.join(', ')}]${args.dryRun ? ' [DRY RUN]' : ''}`);
+    const unknownForms = args.forms.filter(f => !FORM_CONFIG[f]);
+    if (unknownForms.length) {
+        logger.error(`알 수 없는 form 코드: ${unknownForms.join(', ')} (지원: ${Object.keys(FORM_CONFIG).join(', ')})`);
+        process.exit(1);
+    }
+
+    logger.info(`채용 첨부 수집 시작: form [${args.forms.join(', ')}], 기관 ${institutions.length}개, ${cutoffYear}년 이후, 카테고리 [${args.categories.join(', ')}]${args.dryRun ? ' [DRY RUN]' : ''}`);
 
     const ckpt = loadCkpt();
     const totals = { postings: 0, skipped: 0, files: 0, bytes: 0, errors: 0 };
 
     for (const inst of institutions) {
-        let rows;
-        try {
-            rows = await alioApi.fetchReportRowsSusi(inst.apba_id, REPORT_FORM_NO, { delayMs: REQUEST_DELAY_MS });
-        } catch (err) {
-            logger.error(`${inst.name}: 목록 조회 실패 — ${err.message}`);
-            totals.errors += 1;
-            continue;
-        }
-
-        // 연도 필터 (idate: "2026.03.04")
-        let scoped = rows.filter(row => {
-            const y = parseInt(String(row.idate || row.openDate || '').slice(0, 4), 10);
-            return Number.isFinite(y) && y >= cutoffYear && row.idx;
-        });
-        if (args.limit > 0) scoped = scoped.slice(0, args.limit);
-        if (!scoped.length) continue;
-
-        logger.info(`${inst.name}: 게시글 ${scoped.length}건 (전체 ${rows.length}건 중 ${cutoffYear}년 이후)`);
-
-        for (const row of scoped) {
-            const key = `${inst.apba_id}:${row.idx}`;
-            if (ckpt.done[key]) { totals.skipped += 1; continue; }
-
-            const detailUrl = buildDetailUrl(row);
-            let sections;
-            try {
-                const html = await fetchDetailHtml(detailUrl);
-                sections = parseAttachmentSections(html);
-            } catch (err) {
-                logger.error(`${inst.name} idx=${row.idx}: 상세 조회 실패 — ${err.message}`);
-                totals.errors += 1;
-                await sleep(REQUEST_DELAY_MS);
-                continue;
-            }
-
-            const year = String(row.idate || '').slice(0, 4) || 'unknown';
-            const postFolder = sanitizeSegment(String(row.title || `idx_${row.idx}`)).slice(0, 120);
-            const postDir = path.join(args.out, getInstitutionFolderName(inst), SCD_FOLDER, year, postFolder);
-
-            const manifest = {
-                disclosure_no: row.disclosureNo,
-                idx: row.idx,
-                title: row.title || '',
-                idate: row.idate || '',
-                source_url: detailUrl,
-                collected_at: new Date().toISOString(),
-                available_categories: Object.keys(sections),
-                downloaded: {}
-            };
-
-            let downloadedAny = false;
-            for (const category of args.categories) {
-                const files = sections[category];
-                if (!files) continue;
-                manifest.downloaded[category] = [];
-                for (const file of files) {
-                    if (args.dryRun) {
-                        logger.info(`  [DRY] ${category}: ${file.fileName} (fileNo=${file.fileNo})`);
-                        continue;
-                    }
-                    try {
-                        fs.mkdirSync(postDir, { recursive: true });
-                        const safeName = resolveCollision(postDir, sanitizeSegment(file.fileName));
-                        const size = await downloadFile(file.fileNo, path.join(postDir, safeName));
-                        manifest.downloaded[category].push({ file_no: file.fileNo, file_name: safeName, size });
-                        totals.files += 1;
-                        totals.bytes += size;
-                        downloadedAny = true;
-                        logger.info(`  ${category}: ${safeName} (${(size / 1024).toFixed(0)}KB)`);
-                    } catch (err) {
-                        logger.error(`  다운로드 실패 fileNo=${file.fileNo} (${file.fileName}) — ${err.message}`);
-                        totals.errors += 1;
-                    }
-                    await sleep(REQUEST_DELAY_MS);
-                }
-            }
-
-            if (!args.dryRun && downloadedAny) {
-                fs.writeFileSync(path.join(postDir, 'recruit_manifest.json'), JSON.stringify(manifest, null, 2));
-            }
-            if (!args.dryRun) {
-                ckpt.done[key] = { at: new Date().toISOString(), files: totals.files };
-                saveCkpt(ckpt);
-            }
-            totals.postings += 1;
-            await sleep(REQUEST_DELAY_MS);
+        for (const formNo of args.forms) {
+            await processForm(inst, formNo, args, cutoffYear, ckpt, totals);
         }
     }
 
