@@ -40,6 +40,19 @@ async function runPool(items, limit, worker) {
     await Promise.all(executing);
 }
 
+// ── report-level 체크포인트 ──
+// raw를 오프사이트로 옮겨 로컬에서 삭제해도, disclosureNo 기준으로 이미 수집한 report를
+// 스킵할 수 있게 한다(디스크 존재 여부 무관). 샤드 병렬 시 SKIP_DOWNLOAD_CKPT=1로 race 회피.
+function loadDownloadCkpt(p) {
+    try { return JSON.parse(require('fs').readFileSync(p, 'utf8')); } catch { return { done: {} }; }
+}
+function saveDownloadCkpt(p, ckpt) {
+    const fs = require('fs'); const tmp = p + '.tmp';
+    fs.mkdirSync(require('path').dirname(p), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(ckpt, null, 2));
+    fs.renameSync(tmp, p); // atomic
+}
+
 function parseList(value) {
     return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
 }
@@ -77,6 +90,8 @@ function parseArgs(argv) {
             case '--apba-ids': args.apbaIds = new Set(parseList(takeValue())); break;
             case '--inst-type': args.instType = takeValue().trim(); break;
             case '--print-scope': args.printScope = true; break;
+            case '--recheck': args.recheck = true; break;   // 체크포인트 무시하고 전 report 재처리
+            case '--ckpt': args.ckptPath = takeValue(); break;
         }
     }
     return args;
@@ -283,6 +298,11 @@ async function downloadDocuments() {
     const args = parseArgs(process.argv.slice(2));
     const retryTargets = loadRetryTargets(args.retryTargets);
 
+    // report-level 체크포인트 (raw 삭제 후 증분 수집용). SKIP_DOWNLOAD_CKPT=1이면 비활성(샤드 병렬 시).
+    const DL_CKPT = process.env.SKIP_DOWNLOAD_CKPT ? null : (args.ckptPath || path.join(__dirname, '../data/logs/download_ckpt.json'));
+    const dlCkpt = DL_CKPT ? loadDownloadCkpt(DL_CKPT) : { done: {} };
+    let ckptDirty = 0;
+
     // reports.json은 선택사항 — 없으면 (기관, 공시코드)별 라이브 API 조회로 대체
     const reportsPath = path.join(__dirname, '../data/reports.json');
     const reports = fs.existsSync(reportsPath) ? JSON.parse(fs.readFileSync(reportsPath, 'utf8')) : [];
@@ -361,6 +381,13 @@ async function downloadDocuments() {
                 if (!report.disclosure_no) {
                     logger.info(`Skipping ${inst.apba_id}/${report.report_form_root_no}: disclosureNo 없음 (게시판형 항목)`);
                     continue;
+                }
+
+                // 체크포인트 스킵 — 이미 수집한 report는 raw 유무와 무관하게 건너뜀 (idate 변경 시 재처리)
+                if (DL_CKPT && !args.recheck) {
+                    const prev = dlCkpt.done[report.disclosure_no];
+                    const idate = String(report.idate || report.critYyyy || '');
+                    if (prev && (!prev.idate || !idate || prev.idate === idate)) continue;
                 }
 
                 const resolved = resolveDisclosureItem(report.report_form_root_no, itemByCode);
@@ -498,9 +525,19 @@ async function downloadDocuments() {
                 if (!process.env.SKIP_STRUCTURED_INDEX) {
                     upsertStructuredIndex(structuredBase, yearDir, explorerManifest);
                 }
+                // 체크포인트 기록 (disclosureNo 기준). 주기적 저장으로 I/O 절감.
+                if (DL_CKPT) {
+                    dlCkpt.done[report.disclosure_no] = {
+                        form: report.report_form_root_no,
+                        idate: String(report.idate || report.critYyyy || ''),
+                        at: new Date().toISOString(),
+                    };
+                    if (++ckptDirty % 25 === 0) saveDownloadCkpt(DL_CKPT, dlCkpt);
+                }
             }
         }
     }
+    if (DL_CKPT && ckptDirty) saveDownloadCkpt(DL_CKPT, dlCkpt);  // 최종 저장
 }
 
 if (require.main === module) {

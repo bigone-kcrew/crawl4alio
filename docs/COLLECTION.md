@@ -173,3 +173,14 @@ ALIO가 제공하는 통계 엑셀(임직원 수, 평균보수 등)을 다운로
 ## 5. 신규 공시 모니터링 — `check_disclosure_recency.js`
 
 이미 수집한 데이터 기준으로 ALIO에 새로 올라온 공시를 감지합니다. 정기 실행(cron 등)에 적합합니다.
+
+## report 체크포인트 (raw 오프사이트 증분 수집)
+
+`download_documents_advanced.js`는 report 처리 시 `data/logs/download_ckpt.json`에 disclosureNo를 기록한다. 이후 실행에서 이미 처리한 report는 **raw 파일이 로컬에 없어도**(오프사이트 아카이브로 옮겨 삭제한 경우) 건너뛴다 — 지난 수집 이후 신규만 다운로드.
+
+- `--recheck`: 체크포인트 무시하고 전 report 재처리
+- `--ckpt <path>`: 체크포인트 경로 지정(기본 `data/logs/download_ckpt.json`)
+- `SKIP_DOWNLOAD_CKPT=1`: 체크포인트 비활성(기관 샤딩 병렬 시 공유파일 race 회피용)
+- idate/critYyyy 변경 시 재처리(내용 갱신 반영)
+
+채용/게시판 수집기는 이미 posting-level 체크포인트(`formNo:apbaId:idx`+idate)라 raw 삭제와 무관하게 증분 동작.
