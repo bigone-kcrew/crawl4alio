@@ -359,7 +359,33 @@ async function downloadDocuments() {
 
                     attachments.push(att);
                     const filePath = path.join(yearDir, att.file_name);
-                    if (fs.existsSync(filePath)) continue;
+
+                    // 파일 존재 시 크기 비교: 같으면 스킵, 다르면 _alt로 보존
+                    if (fs.existsSync(filePath)) {
+                        const existingSize = fs.statSync(filePath).size;
+                        const tmpPath = filePath + '.__tmp';
+                        try {
+                            const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
+                            const writer = fs.createWriteStream(tmpPath);
+                            response.data.pipe(writer);
+                            await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); });
+                            const newSize = fs.statSync(tmpPath).size;
+                            if (newSize === existingSize) {
+                                fs.unlinkSync(tmpPath);
+                            } else {
+                                const ext = path.extname(filePath);
+                                const base = path.basename(filePath, ext);
+                                const dir = path.dirname(filePath);
+                                let n = 2; let altPath;
+                                do { altPath = path.join(dir, `${base}_alt${n}${ext}`); n++; } while (fs.existsSync(altPath));
+                                fs.renameSync(tmpPath, altPath);
+                                logger.info(`Downloading (alt): ${path.basename(altPath)}`);
+                            }
+                        } catch (err) {
+                            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+                        }
+                        continue;
+                    }
 
                     try {
                         logger.info(`Downloading: ${att.name || att.file_name}`);

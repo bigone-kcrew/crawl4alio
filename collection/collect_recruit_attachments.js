@@ -195,10 +195,32 @@ async function acquireFile(fileNo, destPath) {
         }
         return { action: 'copied', size: fs.statSync(destPath).size };
     }
-    // 파일명 충돌 (fileNo가 다른 파일) → 기존 유지, 캐시 등록
+    // 파일명 충돌 (fileNo가 다른 파일) → 크기 비교
     if (fs.existsSync(destPath)) {
-        fileNoCache.set(fileNo, destPath);
-        return { action: 'skipped', size: fs.statSync(destPath).size };
+        const existingSize = fs.statSync(destPath).size;
+        const tmpPath = destPath + '.__tmp';
+        try {
+            const newSize = await downloadFile(fileNo, tmpPath);
+            if (newSize === existingSize) {
+                // 크기 동일 → 같은 내용으로 간주, 스킵
+                fs.unlinkSync(tmpPath);
+                fileNoCache.set(fileNo, destPath);
+                return { action: 'skipped', size: existingSize };
+            }
+            // 크기 다름 → _alt 이름으로 보존
+            const ext = path.extname(destPath);
+            const base = path.basename(destPath, ext);
+            const dir = path.dirname(destPath);
+            let n = 2;
+            let altPath;
+            do { altPath = path.join(dir, `${base}_alt${n}${ext}`); n++; } while (fs.existsSync(altPath));
+            fs.renameSync(tmpPath, altPath);
+            fileNoCache.set(fileNo, altPath);
+            return { action: 'alt', size: newSize };
+        } catch (err) {
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+            throw err;
+        }
     }
     // 신규 다운로드
     const size = await downloadFile(fileNo, destPath);
