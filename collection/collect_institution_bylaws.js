@@ -70,7 +70,9 @@ function loadCheckpoint() {
 }
 
 function saveCheckpoint(ckpt) {
-  fs.writeFileSync(CKPT_PATH, JSON.stringify(ckpt, null, 2), 'utf8');
+    const tmp = CKPT_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(ckpt, null, 2), 'utf8');
+    fs.renameSync(tmp, CKPT_PATH);
 }
 
 // ── 규정 목록 가져오기 ────────────────────────────────────────────────────────

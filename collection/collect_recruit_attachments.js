@@ -235,8 +235,11 @@ function loadCkpt() {
     catch { return { done: {} }; }
 }
 function saveCkpt(ckpt) {
-    fs.mkdirSync(path.dirname(ckptPath()), { recursive: true });
-    fs.writeFileSync(ckptPath(), JSON.stringify(ckpt, null, 2));
+    const p = ckptPath();
+    const tmp = p + '.tmp';
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(ckpt, null, 2));
+    fs.renameSync(tmp, p); // atomic on POSIX — prevents corruption under concurrent writes
 }
 
 async function processForm(inst, formNo, args, cutoffYear, ckpt, totals) {
