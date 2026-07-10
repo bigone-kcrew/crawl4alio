@@ -38,11 +38,11 @@ const FORM_CONFIG = {
     B1010: { detailPath: '/item/itemBoardB1010.do', tableName: 'COMM_BOARD',  idxName: 'BOARD_NO', scdFolder: 'B1010_인력관리' },
 };
 
-// B1010 파일명 기반 카테고리 추론 키워드
+// B1010 파일명 기반 카테고리 추론 키워드 (더 구체적인 것 먼저)
 const CATEGORY_KEYWORDS = [
-    { category: '공고문',    patterns: [/공고문/, /공고/, /채용\s*공고/, /모집\s*공고/] },
-    { category: '입사지원서', patterns: [/입사\s*지원서/, /지원서/, /지원\s*서류/, /자기소개서/, /이력서/] },
     { category: '직무기술서', patterns: [/직무\s*기술서/, /직무기술/, /NCS/, /직무\s*소개서/] },
+    { category: '입사지원서', patterns: [/입사\s*지원서/, /지원\s*서류/, /지원서/, /자기소개서/, /이력서/] },
+    { category: '공고문',    patterns: [/공고문/, /채용\s*공고/, /모집\s*공고/, /초빙\s*공고/, /공고/] },
 ];
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -182,13 +182,14 @@ async function downloadFile(fileNo, destPath) {
     return fs.statSync(destPath).size;
 }
 
-// 같은 폴더 내 파일명 충돌 시 " (2)" 식 접미사
+// 같은 폴더 내 파일명 충돌 시 " (2)" 식 접미사. 빈 파일명은 fallback 적용
 function resolveCollision(dir, fileName) {
-    let candidate = fileName;
+    const base = fileName || 'file';
+    let candidate = base;
     let n = 2;
     while (fs.existsSync(path.join(dir, candidate))) {
-        const ext = path.extname(fileName);
-        candidate = `${path.basename(fileName, ext)} (${n})${ext}`;
+        const ext = path.extname(base);
+        candidate = `${path.basename(base, ext)} (${n})${ext}`;
         n += 1;
     }
     return candidate;
