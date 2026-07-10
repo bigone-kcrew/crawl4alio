@@ -103,9 +103,11 @@ async function fetchReportRowsSusi(apbaId, reportFormRootNo, options = {}) {
         const data = body?.data || {};
         const pageRows = Array.isArray(data.result) ? data.result : [];
         for (const row of pageRows) {
-            const disclosureNo = String(row?.disclosureNo || '').trim();
-            if (disclosureNo && seen.has(disclosureNo)) continue;
-            if (disclosureNo) seen.add(disclosureNo);
+            // 게시판형(B1210/B1220 등)은 disclosureNo가 전부 '0000...'이라 disclosureNo만으로
+            // dedup하면 기관당 1건으로 접힘 → idx까지 포함해 게시글별 유일 키로 판정.
+            const dedupKey = `${String(row?.disclosureNo || '').trim()}|${String(row?.idx || '').trim()}`;
+            if (seen.has(dedupKey)) continue;
+            seen.add(dedupKey);
             rows.push(row);
         }
 
