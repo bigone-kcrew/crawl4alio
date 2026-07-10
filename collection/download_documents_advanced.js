@@ -25,6 +25,20 @@ const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
 
 const CRAWL4AI_URL = process.env.CRAWL4AI_URL || 'http://localhost:11235/crawl';
 const CRAWL4AI_TOKEN = (process.env.CRAWL4AI_API_TOKEN || '').trim();
+// 첨부파일 동시 다운로드 수. 첨부는 ALIO 직결(crawl4ai 아님)이라 병렬 안전.
+// 보고서 본문 스크래핑(crawl4ai)은 report별 순차 유지 — 단일 컨테이너 부하 보호.
+const ATTACH_CONCURRENCY = Number(process.env.DOWNLOAD_ATTACH_CONCURRENCY || 4);
+
+// 최대 limit개를 동시에 실행하며 items를 순회한다.
+async function runPool(items, limit, worker) {
+    const executing = new Set();
+    for (const item of items) {
+        const p = Promise.resolve().then(() => worker(item)).finally(() => executing.delete(p));
+        executing.add(p);
+        if (executing.size >= limit) await Promise.race(executing);
+    }
+    await Promise.all(executing);
+}
 
 function parseList(value) {
     return String(value || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -174,6 +188,46 @@ async function fetchPdfJson(disclosureNo) {
     } catch (err) {
         logger.info(`pdf.json unavailable for ${disclosureNo}: ${err.message}`);
         return null;
+    }
+}
+
+// 첨부 1건 확보 (ALIO 직결 스트림). 파일 존재 시 크기 비교 후 스킵/_alt, 없으면 신규.
+// 한 report 내 파일명은 호출 전 dedup되어 destPath가 유일 → 동시 실행 안전(경합 없음).
+async function downloadAttachment(att, yearDir) {
+    const filePath = path.join(yearDir, att.file_name);
+    if (fs.existsSync(filePath)) {
+        const existingSize = fs.statSync(filePath).size;
+        const tmpPath = filePath + '.__tmp';
+        try {
+            const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
+            const writer = fs.createWriteStream(tmpPath);
+            response.data.pipe(writer);
+            await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); response.data.on('error', reject); });
+            const newSize = fs.statSync(tmpPath).size;
+            if (newSize === existingSize) {
+                fs.unlinkSync(tmpPath);
+            } else {
+                const ext = path.extname(filePath);
+                const base = path.basename(filePath, ext);
+                const dir = path.dirname(filePath);
+                let n = 2; let altPath;
+                do { altPath = path.join(dir, `${base}_alt${n}${ext}`); n++; } while (fs.existsSync(altPath));
+                fs.renameSync(tmpPath, altPath);
+                logger.info(`Downloading (alt): ${path.basename(altPath)}`);
+            }
+        } catch (err) {
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        }
+        return;
+    }
+    try {
+        logger.info(`Downloading: ${att.name || att.file_name}`);
+        const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
+        const writer = fs.createWriteStream(filePath);
+        response.data.pipe(writer);
+        await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); response.data.on('error', reject); });
+    } catch (err) {
+        logger.error(`Download failed: ${att.name || att.file_name}: ${err.message}`);
     }
 }
 
@@ -358,53 +412,18 @@ async function downloadDocuments() {
                     ...(Array.isArray(reportAttachments.attachments) ? reportAttachments.attachments.map((att, index) => normalizeAttachmentRecord(att, index)) : [])
                 ];
 
-                for (const [index, att] of attachmentSources.entries()) {
+                // 파일명 기준 dedup (순차·저비용) — attachments는 manifest용, toDownload는 실제 다운로드 대상
+                const seenNames = new Set();
+                const toDownload = [];
+                for (const att of attachmentSources) {
                     if (!att.download_url) continue;
-                    if (attachments.some(existing => existing.file_name === att.file_name)) continue;
-
+                    if (seenNames.has(att.file_name)) continue;
+                    seenNames.add(att.file_name);
                     attachments.push(att);
-                    const filePath = path.join(yearDir, att.file_name);
-
-                    // 파일 존재 시 크기 비교: 같으면 스킵, 다르면 _alt로 보존
-                    if (fs.existsSync(filePath)) {
-                        const existingSize = fs.statSync(filePath).size;
-                        const tmpPath = filePath + '.__tmp';
-                        try {
-                            const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
-                            const writer = fs.createWriteStream(tmpPath);
-                            response.data.pipe(writer);
-                            await new Promise((resolve, reject) => { writer.on('finish', resolve); writer.on('error', reject); });
-                            const newSize = fs.statSync(tmpPath).size;
-                            if (newSize === existingSize) {
-                                fs.unlinkSync(tmpPath);
-                            } else {
-                                const ext = path.extname(filePath);
-                                const base = path.basename(filePath, ext);
-                                const dir = path.dirname(filePath);
-                                let n = 2; let altPath;
-                                do { altPath = path.join(dir, `${base}_alt${n}${ext}`); n++; } while (fs.existsSync(altPath));
-                                fs.renameSync(tmpPath, altPath);
-                                logger.info(`Downloading (alt): ${path.basename(altPath)}`);
-                            }
-                        } catch (err) {
-                            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-                        }
-                        continue;
-                    }
-
-                    try {
-                        logger.info(`Downloading: ${att.name || att.file_name}`);
-                        const response = await axios.get(att.download_url, { responseType: 'stream', timeout: 60000 });
-                        const writer = fs.createWriteStream(filePath);
-                        response.data.pipe(writer);
-                        await new Promise((resolve, reject) => {
-                            writer.on('finish', resolve);
-                            writer.on('error', reject);
-                        });
-                    } catch (err) {
-                        logger.error(`Download failed: ${att.name || att.file_name}: ${err.message}`);
-                    }
+                    toDownload.push(att);
                 }
+                // 첨부 다운로드만 병렬 (ALIO 직결). dedup으로 destPath 유일 → 경합 없음.
+                await runPool(toDownload, ATTACH_CONCURRENCY, att => downloadAttachment(att, yearDir));
 
                 if (attachments.length > 0) {
                     fs.writeFileSync(path.join(yearDir, 'attachments.json'), JSON.stringify(attachments, null, 2));
