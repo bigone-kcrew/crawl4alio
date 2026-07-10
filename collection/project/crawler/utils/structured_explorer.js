@@ -10,7 +10,11 @@ const MANIFEST_FILE_NAME = 'manifest.json';
 
 function readJsonIfExists(filePath) {
     if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    try {
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+        return null; // 동시 쓰기 중 부분 파일 등 파싱 실패 시 안전 폴백
+    }
 }
 
 function uniq(values) {

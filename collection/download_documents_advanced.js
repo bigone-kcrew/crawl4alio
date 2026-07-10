@@ -494,7 +494,10 @@ async function downloadDocuments() {
                     originalContentPath: path.join(yearDir, 'content.json')
                 });
                 fs.writeFileSync(path.join(yearDir, 'manifest.json'), JSON.stringify(explorerManifest, null, 2));
-                upsertStructuredIndex(structuredBase, yearDir, explorerManifest);
+                // 샤드 병렬 실행 시 공유 인덱스 파일 race 방지 — 수집 중 upsert 스킵(Stage C/D에서 인덱스 재생성).
+                if (!process.env.SKIP_STRUCTURED_INDEX) {
+                    upsertStructuredIndex(structuredBase, yearDir, explorerManifest);
+                }
             }
         }
     }
