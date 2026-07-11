@@ -96,6 +96,21 @@ npm run sync:alio                    # 신규 공시 감지 (리포트)
 node collection/sync_alio.js --mode=apply   # 감지 즉시 자동 수집
 ```
 
+### 데이터 폴더 분리 운영 (v1.3.1)
+
+```bash
+# CATALOG_ROOT: 데이터 카탈로그 루트 지정 — 수집물·인덱스·로그·체크포인트가 전부 이 아래로.
+# 심링크 없이 저장소(코드)와 데이터 폴더를 분리 운영. 미지정 시 저장소 내 data/ (기존 동작).
+CATALOG_ROOT=/path/to/data node collection/download_documents_advanced.js ...
+
+# raw/md 트리 분리 시(원본=alio-raw, 변환·메타=alio-md):
+#  - structured_data가 alio-md를 가리키면 원본 경로는 자동으로 alio-raw 미러로 해석
+#  - 명시 지정: ALIO_RAW_BASE(수집), --raw-root / --md-root(변환)
+
+# 원본(raw) 오프사이트 보관 후 증분: report 체크포인트가 디스크 유무와 무관하게 기수집을 스킵.
+node collection/seed_download_ckpt.js   # 기수집 manifest에서 체크포인트 백필(1회)
+```
+
 더 자세한 사용법은 [docs/COLLECTION.md](docs/COLLECTION.md), [docs/CONVERSION.md](docs/CONVERSION.md), [docs/PARSERS.md](docs/PARSERS.md)를 참고하세요.
 
 ## 폴더 구조
