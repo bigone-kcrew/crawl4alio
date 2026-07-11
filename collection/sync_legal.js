@@ -21,12 +21,13 @@
 'use strict';
 
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const https = require('https');
 
 const OC = (process.env.OPENAPILAWKEY || process.env.LAW_OC || '').trim();
-const MANIFEST_PATH = path.join(__dirname, '..', 'data', 'legal-md', 'source_manifest.json');
-const LOGS_DIR = path.join(__dirname, '..', 'data', 'logs');
+const MANIFEST_PATH = fromCatalogRoot('legal-md', 'source_manifest.json');
+const LOGS_DIR = fromLogsRoot();
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');

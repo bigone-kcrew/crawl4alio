@@ -274,7 +274,7 @@ async function main() {
     const unknown = args.forms.filter(f => !FORM_CONFIG[f]);
     if (unknown.length) { logger.error(`알 수 없는 form: ${unknown.join(', ')} (지원: ${Object.keys(FORM_CONFIG).join(', ')})`); process.exit(1); }
 
-    const institutionsAll = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/institutions.json'), 'utf8'));
+    const institutionsAll = JSON.parse(fs.readFileSync(fromCatalogRoot('institutions.json'), 'utf8'));
     const institutions = args.apba ? institutionsAll.filter(i => args.apba.includes(i.apba_id)) : institutionsAll;
 
     logger.info(`게시판형 공시 수집 시작: forms [${args.forms.join(', ')}], 기관 ${institutions.length}개, ${cutoffYear}년 이후${args.dryRun ? ' [DRY]' : ''}`);

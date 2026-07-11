@@ -18,11 +18,12 @@
 'use strict';
 
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const https = require('https');
 
 const OC = (process.env.OPENAPILAWKEY || process.env.LAW_OC || '').trim();
-const MANIFEST_PATH = path.join(__dirname, '..', 'data', 'legal-md', 'source_manifest.json');
+const MANIFEST_PATH = fromCatalogRoot('legal-md', 'source_manifest.json');
 
 // 카테고리 코드 → 저장 폴더 (기존 manifest의 local_path 관례)
 const CATEGORY_DIRS = {

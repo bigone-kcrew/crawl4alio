@@ -1,8 +1,9 @@
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 
-const PROCESSED_DIR = path.join(__dirname, '../data/processed/statistics');
+const PROCESSED_DIR = fromCatalogRoot('processed', 'statistics');
 const INDEX_PATH = path.join(PROCESSED_DIR, 'index.json');
 
 async function run() {

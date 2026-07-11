@@ -9,13 +9,27 @@
 ## 무엇을 할 수 있나요
 
 1. **ALIO 경영공시 수집** — 355개 공공기관 × 전체 92개 공시항목(정기/수시 자동 구분). 공시항목(`--scope all|--categories|--items`)과 기관(`--ministry|--apba-ids|--inst-type`)을 자유롭게 선택. 본문 가치 없는 문서첨부형 항목은 `--attach-only-items`로 crawl4ai 스킵(첨부만 수집, 대량 항목 대폭 가속)
-2. **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 항목 전담(`collect_board_disclosures.js`): **국회 지적사항(B1210)·감사원 등 지적(B1220)**은 본문(`내용.md`)+첨부, **경영평가결과(B1230/B1250)**는 첨부 수집
+2. **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 항목 전담: **국회 지적사항(B1210)·감사원 등 지적(B1220)**은 본문(`내용.md`)+첨부, **경영평가결과(B1230/B1250)**는 첨부(`collect_board_disclosures.js`), **채용공고(B1010/B1020)**는 게시글+첨부 전량(`collect_recruit_attachments.js`, posting 체크포인트·병렬)
 3. **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락 공시만 수집 (`sync_alio.js`: 반자동 report / 자동 apply, `sync_legal.js`: 법령 개정 감지). 다운로더는 disclosureNo **report 체크포인트**로 raw를 오프사이트로 옮겨 삭제한 뒤에도 증분 수집 가능
 4. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), 그 외 부처 지침은 크롤링+변환
 5. **기관 내부규정 수집** — ALIO `21110` 게시판에서 기관별 규정 수집 (최신본 또는 `--all-files`로 개정 이력 전체)
 6. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환. ZIP 자동 해제(`extract_zips.js`), raw/md 미러 출력(`--md-root`) 지원
 
 ## 아키텍처
+
+### 수집 계층 (목록 → 크롤러)
+
+| 계층 | 스크립트 | 대상 | 방식 |
+|------|----------|------|------|
+| **① 수집대상 목록** | `fetch_disclosure_catalog.js` | 공시항목 카탈로그 92종(`disclosure_items.json`, 정기/수시 판정) | formList API |
+| | `data/institutions.json` | 공공기관 355개(apba_id·부처·유형) | **정적 커밋본** — 갱신 수집기 미구현(신규 지정·해제 기관은 수동 반영, 알려진 갭) |
+| **② 크롤러형** | `download_documents_advanced.js` | disclosureNo 있는 일반공시(감사·이사회·재무·보수 등) | 상세페이지 crawl4ai + 첨부 직접 HTTP(`--attach-only-items`로 crawl4ai 스킵 가능) |
+| **③ 게시판형** | `collect_board_disclosures.js` | B1210/B1220(본문+첨부)·B1230/B1250(첨부) | 게시판 목록 API + pfile/fileNo 다운로드 |
+| | `collect_recruit_attachments.js` | B1010/B1020 채용공고 | 게시글 병렬 + posting 체크포인트 |
+| | `collect_institution_bylaws.js` | 21110 기관 내부규정 | 게시판 + 최신본/`--all-files` |
+| **④ 별도 소스** | `collect_legal_corpus.js` / `sync_legal.js` | 법령·행정규칙(개정 감지) | law.go.kr DRF API |
+
+모든 계층이 `CATALOG_ROOT` 하나로 데이터 루트를 공유한다(목록·수집물·체크포인트·로그).
 
 ```mermaid
 flowchart LR

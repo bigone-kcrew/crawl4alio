@@ -6,11 +6,12 @@
  */
 'use strict';
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const { execSync } = require('child_process');
 
 const RAW_BASE  = '/workspace/alio/2_data/alio-raw/자료/기관별공시';
-const CKPT_PATH = path.join(__dirname, '../data/logs/recruit_b1020_ckpt.json');
+const CKPT_PATH = fromLogsRoot('recruit_b1020_ckpt.json');
 const DRY_RUN   = process.argv.includes('--dry-run');
 
 function loadCkpt() {

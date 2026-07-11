@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { fetchDisclosureCatalog, PERIODIC_SCDS } = require('./project/crawler/utils/alio_api');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = require('./project/crawler/utils/paths').catalogRoot;
 const RAW_PATH = path.join(DATA_DIR, 'disclosure_items_raw.json');
 const ITEMS_PATH = path.join(DATA_DIR, 'disclosure_items.json');
 const DRY_RUN = process.argv.includes('--dry-run');

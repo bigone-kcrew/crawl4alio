@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const axios = require('axios');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
@@ -11,7 +12,7 @@ const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 
 const BASE_URL = 'https://www.alio.go.kr';
 const SUSI_API_URL = `${BASE_URL}/information/informationList.json`;
-const RAW_SUSI_DIR = path.join(__dirname, '../data/raw/susi');
+const RAW_SUSI_DIR = fromCatalogRoot('raw', 'susi');
 
 const CATEGORY_MAP = {
     'audit': '감사원/주무부처 지적사항',

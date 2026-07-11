@@ -17,6 +17,7 @@
  * 변환 후 해당 corpus의 인덱스를 재생성하세요.
  */
 const fs = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -31,8 +32,8 @@ const OCR_TIMEOUT = 3600000;
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
 const opt  = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i+1] ? args[i+1] : d; };
-const SRC  = path.resolve(opt('--src',  path.join(__dirname, '..', 'data', 'legal-raw', '법령자료')));
-const DEST = path.resolve(opt('--dest', path.join(__dirname, '..', 'data', 'legal-md', '법령자료')));
+const SRC  = path.resolve(opt('--src',  fromCatalogRoot('legal-raw', '법령자료')));
+const DEST = path.resolve(opt('--dest', fromCatalogRoot('legal-md', '법령자료')));
 const ONLY = opt('--only', '');
 const DRY = flag('--dry'), FORCE = flag('--force');
 

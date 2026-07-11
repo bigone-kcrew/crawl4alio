@@ -14,6 +14,7 @@
 'use strict';
 
 const fs     = require('fs');
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
 const path   = require('path');
 const crypto = require('crypto');
 const axios  = require('axios');
@@ -23,7 +24,7 @@ const yaml   = require('js-yaml');
 process.on('SIGPIPE', () => {});
 
 // ── 로그: stdout이 TTY면 파일에도 기록, nohup 리다이렉트 시엔 stdout만 사용 ──
-const LOG_PATH = path.join(__dirname, '../data/logs/ocr_conversion_run.log');
+const LOG_PATH = fromLogsRoot('ocr_conversion_run.log');
 const _log = console.log.bind(console);
 const IS_TTY = Boolean(process.stdout.isTTY);
 console.log = (...args) => {
