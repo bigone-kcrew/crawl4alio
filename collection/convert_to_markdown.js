@@ -112,9 +112,16 @@ const MD_MIRROR_ROOT = mdRootArgIdx >= 0 && process.argv[mdRootArgIdx + 1]
 // 미지정 시 STRUCTURED_DIR(=structured_data) 하위에서 읽던 기존 동작 유지.
 //   node collection/convert_to_markdown.js --raw-root /workspace/alio/2_data/alio-raw/자료/기관별공시
 const rawRootArgIdx = process.argv.indexOf('--raw-root');
-const RAW_SOURCE_ROOT = rawRootArgIdx >= 0 && process.argv[rawRootArgIdx + 1]
-  ? path.resolve(process.argv[rawRootArgIdx + 1])
-  : (process.env.RAW_SOURCE_ROOT ? path.resolve(ROOT, process.env.RAW_SOURCE_ROOT) : STRUCTURED_DIR);
+const RAW_SOURCE_ROOT = (() => {
+  if (rawRootArgIdx >= 0 && process.argv[rawRootArgIdx + 1]) return path.resolve(process.argv[rawRootArgIdx + 1]);
+  if (process.env.RAW_SOURCE_ROOT) return path.resolve(ROOT, process.env.RAW_SOURCE_ROOT);
+  // raw/md 분리 자동 감지: structured가 alio-md를 가리키면 원본은 alio-raw 미러
+  try {
+    const real = fs.realpathSync(STRUCTURED_DIR);
+    if (real.includes('/alio-md/')) return real.replace('/alio-md/', '/alio-raw/');
+  } catch { /* fall through */ }
+  return STRUCTURED_DIR;
+})();
 
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 
@@ -161,7 +168,11 @@ function loadCheckpoint() {
 
 function saveCheckpoint(ckpt) {
   ckpt.last_updated = new Date().toISOString();
-  fs.writeFileSync(CHECKPOINT_PATH, JSON.stringify(ckpt, null, 2));
+  // atomic write — 대형(수십MB) ckpt를 다른 프로세스(OCR 하이브리드 등)가 읽다
+  // 부분 JSON을 만나지 않도록 tmp→rename.
+  const tmp = CHECKPOINT_PATH + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(ckpt, null, 2));
+  fs.renameSync(tmp, CHECKPOINT_PATH);
 }
 
 // ── 파일 해시 캐시 (동일 파일 중복 파싱 방지) ──────────────────────────────────

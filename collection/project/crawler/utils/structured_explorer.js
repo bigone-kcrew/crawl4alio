@@ -698,7 +698,10 @@ function findPrimaryContentFile(yearDir) {
 
     const candidates = fs.readdirSync(yearDir)
         .filter(fileName => fileName.endsWith('.json'))
-        .filter(fileName => !['attachments.json', 'sections.json', INDEX_FILE_NAME, LATEST_INDEX_FILE_NAME, DOWNLOAD_FILE_INDEX_FILE_NAME, MANIFEST_FILE_NAME].includes(fileName));
+        .filter(fileName => !['attachments.json', 'sections.json', INDEX_FILE_NAME, LATEST_INDEX_FILE_NAME, DOWNLOAD_FILE_INDEX_FILE_NAME, MANIFEST_FILE_NAME,
+            // 게시판/채용 수집기 메타 — 스키마가 달라 fallback 해석 시 기관정보가 비어
+            // id 충돌(`::0000:파일명`)로 인덱스가 붕괴한다. 전용 인덱서 소관으로 제외.
+            'board_manifest.json', 'recruit_manifest.json', 'detail_fields.json'].includes(fileName));
 
     if (candidates.length === 0) return null;
 

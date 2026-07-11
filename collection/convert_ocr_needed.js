@@ -75,6 +75,9 @@ function acquireLock() {
 const DRY_RUN = process.argv.includes('--dry-run');
 // --refresh: ocr_needed.json을 메인 체크포인트에서 강제 재생성 (메인 변환 완료 후 재실행 시 사용)
 const REFRESH = process.argv.includes('--refresh');
+// 하이브리드 모드: kordoc 변환(convert_to_markdown)과 동시 구동 시 메인 ckpt 병합을 생략
+// (실행 중인 변환기의 주기 저장이 병합을 되돌리므로, 변환 종료 후 마지막 1회만 병합)
+const SKIP_MAIN_MERGE = process.argv.includes('--skip-main-merge');
 
 // ── .env.parsers 로드 ──────────────────────────────────────────────────────────
 function loadEnvFile() {
@@ -247,7 +250,9 @@ function saveOcrCheckpoint(ckpt) {
 // ── 완료 후 메인 체크포인트에 OCR 결과 병합 ────────────────────────────────────
 function mergeToMainCheckpoint(ocrCkpt) {
   if (!fs.existsSync(MAIN_CKPT_PATH)) return;
-  const main = JSON.parse(fs.readFileSync(MAIN_CKPT_PATH, 'utf8'));
+  let main;
+  try { main = JSON.parse(fs.readFileSync(MAIN_CKPT_PATH, 'utf8')); }
+  catch { console.log('메인 ckpt 파싱 실패 — 병합 건너뜀(다음 실행에서 재시도)'); return; }
   let merged = 0;
   for (const [id, v] of Object.entries(ocrCkpt.files)) {
     if (v.status === 'success') {
@@ -289,7 +294,9 @@ async function main() {
   // 소스: ocr_needed.json (메인 체크포인트와 독립)
   // --refresh 또는 파일 없으면 메인 체크포인트에서 재생성
   if (REFRESH || !fs.existsSync(OCR_NEEDED_PATH)) {
-    const main = JSON.parse(fs.readFileSync(MAIN_CKPT_PATH, 'utf8'));
+    let main;
+  try { main = JSON.parse(fs.readFileSync(MAIN_CKPT_PATH, 'utf8')); }
+  catch { console.log('메인 ckpt 파싱 실패 — 병합 건너뜀(다음 실행에서 재시도)'); return; }
     const list = Object.entries(main.files)
       .filter(([, v]) => v.status === 'ocr_needed' && v.file_path)
       .map(([id, v]) => ({ id, reason: v.reason, file_path: v.file_path }));
@@ -536,7 +543,8 @@ async function main() {
   }
 
   // 완료 후 메인 체크포인트에 OCR 성공 결과 병합 (메인 변환이 끝났을 때 안전하게 반영)
-  mergeToMainCheckpoint(ocrCkpt);
+  if (SKIP_MAIN_MERGE) console.log('메인 ckpt 병합 생략(--skip-main-merge, 하이브리드)');
+  else mergeToMainCheckpoint(ocrCkpt);
 
   // ocr_needed.json 갱신 (아직 실패/미처리 항목)
   const remaining = (ocrNeeded.files || []).filter(item => {
