@@ -4,7 +4,7 @@ node_modules/
 data/logs/
 data/structured_data/
 data/legal-md/*
-!data/legal-md/source_manifest.json
+# (v1.3.1) source_manifest는 CATALOG_ROOT 데이터 폴더 소관 — 저장소 추적 제외
 data/legal-raw/
 data/institution-bylaws/
 data/institution-bylaws-raw/

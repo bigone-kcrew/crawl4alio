@@ -22,6 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
+const { fromCatalogRoot, fromLogsRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
 const { sanitizeSegment, getInstitutionFolderName } = require(path.join(__dirname, 'project/crawler/utils/disclosure_scope'));
 
 const ALIO_BASE = alioApi.ALIO_BASE || 'https://www.alio.go.kr';
@@ -72,7 +73,7 @@ function truncateBytes(str, maxBytes) {
 
 function parseArgs(argv) {
     const args = { forms: ['B1210', 'B1220', 'B1230', 'B1250'], years: 3, apba: null, limit: 0,
-        out: path.join(__dirname, '../data/structured_data'), dryRun: false };
+        out: fromCatalogRoot('structured_data'), dryRun: false };
     for (let i = 2; i < argv.length; i += 1) {
         const take = () => argv[++i];
         switch (argv[i]) {
@@ -168,7 +169,7 @@ async function downloadTo(url, destPath) {
 }
 
 // ── 체크포인트 ──
-function ckptPath() { return path.join(__dirname, '../data/logs/board_ckpt.json'); }
+function ckptPath() { return fromLogsRoot('board_ckpt.json'); }
 function loadCkpt() { try { return JSON.parse(fs.readFileSync(ckptPath(), 'utf8')); } catch { return { done: {} }; } }
 function saveCkpt(ckpt) {
     const p = ckptPath(); const tmp = p + '.tmp';

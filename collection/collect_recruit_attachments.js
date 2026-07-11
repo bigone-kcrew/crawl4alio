@@ -26,6 +26,7 @@ const axios = require('axios');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 const { sanitizeSegment } = require(path.join(__dirname, 'project/crawler/utils/disclosure_scope'));
 const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
+const { fromCatalogRoot, fromLogsRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
 
 const ALIO_BASE = alioApi.ALIO_BASE || 'https://www.alio.go.kr';
 const ALL_CATEGORIES = ['공고문', '입사지원서', '직무기술서', '기타 첨부파일'];
@@ -107,7 +108,7 @@ function parseArgs(argv) {
         categories: ['공고문', '입사지원서', '직무기술서'],
         apba: null,
         limit: 0,
-        out: path.join(__dirname, '../data/structured_data'),
+        out: fromCatalogRoot('structured_data'),
         dryRun: false
     };
     for (let i = 2; i < argv.length; i += 1) {
@@ -314,7 +315,7 @@ async function _acquireCore(fileNo, destPath) {
 }
 
 // ── 체크포인트 ───────────────────────────────────────────────────
-function ckptPath() { return path.join(__dirname, '../data/logs/recruit_b1020_ckpt.json'); }
+function ckptPath() { return fromLogsRoot('recruit_b1020_ckpt.json'); }
 function loadCkpt() {
     try { return JSON.parse(fs.readFileSync(ckptPath(), 'utf8')); }
     catch { return { done: {} }; }
@@ -443,7 +444,7 @@ async function main() {
     const args = parseArgs(process.argv);
     const cutoffYear = new Date().getFullYear() - (args.years - 1);
 
-    const institutionsAll = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/institutions.json'), 'utf8'));
+    const institutionsAll = JSON.parse(fs.readFileSync(fromCatalogRoot('institutions.json'), 'utf8'));
     const institutions = args.apba
         ? institutionsAll.filter(inst => args.apba.includes(inst.apba_id))
         : institutionsAll;

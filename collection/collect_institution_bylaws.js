@@ -25,13 +25,15 @@ const parsers = require('./project/crawler/utils/parsers');
 // ── 설정 ──────────────────────────────────────────────────────────────────────
 const ALIO_BASE       = 'https://www.alio.go.kr';
 
-const DATA_DIR   = path.join(__dirname, '..', 'data');
+// CATALOG_ROOT env로 데이터 루트 이동 가능 (예: CATALOG_ROOT=/workspace/alio/2_data)
+const { catalogRoot } = require('./project/crawler/utils/paths');
+const DATA_DIR   = catalogRoot;
 const RAW_DIR    = path.join(DATA_DIR, 'institution-bylaws-raw');
 const MD_DIR     = path.join(DATA_DIR, 'institution-bylaws-md');
 const CKPT_PATH  = path.join(DATA_DIR, 'institution-bylaws/collect_checkpoint.json');
 const INST_JSON  = path.join(DATA_DIR, 'institutions.json');
 
-const CONCURRENCY   = 2;
+const CONCURRENCY   = parseInt(process.env.BYLAWS_CONCURRENCY || '2'); // 정기수집 튜닝용(ALIO 차단이력 0)
 const REQUEST_DELAY = 400; // ms, 기관 처리 간 딜레이
 const DRY_RUN       = process.argv.includes('--dry-run');
 const SURVEY_MODE   = process.argv.includes('--survey');

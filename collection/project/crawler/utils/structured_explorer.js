@@ -17,6 +17,29 @@ function readJsonIfExists(filePath) {
     }
 }
 
+// raw/md 분리 배포: 원본 바이너리는 alio-raw 미러에 저장됨.
+// structuredBase(alio-md) 상대경로를 raw 미러 절대경로로 변환. 분리 미사용 환경이면 null.
+const rawBaseCache = new Map();
+function resolveRawBase(structuredBase) {
+    if (rawBaseCache.has(structuredBase)) return rawBaseCache.get(structuredBase);
+    let rawBase = process.env.ALIO_RAW_BASE || null;
+    if (!rawBase) {
+        try {
+            const real = fs.realpathSync(structuredBase);
+            if (real.includes('/alio-md/')) rawBase = real.replace('/alio-md/', '/alio-raw/');
+        } catch { /* 미존재 등 → 분리 미사용 */ }
+    }
+    rawBaseCache.set(structuredBase, rawBase);
+    return rawBase;
+}
+
+// 원본 존재 판정: raw 미러 우선, md(기존 단일 트리) 폴백 — 하위호환.
+function originalFileExists(structuredBase, relPath) {
+    const rawBase = resolveRawBase(structuredBase);
+    if (rawBase && fs.existsSync(path.join(rawBase, relPath))) return true;
+    return fs.existsSync(path.join(structuredBase, relPath));
+}
+
 function uniq(values) {
     return [...new Set(values.filter(Boolean))];
 }
@@ -494,7 +517,7 @@ function buildDownloadFileEntries(manifest, yearDir, structuredBase) {
             file_label: attachment.name || fileName,
             file_path: filePath,
             download_url: attachment.url || '',
-            downloaded: fs.existsSync(absolutePath)
+            downloaded: structuredBase ? originalFileExists(structuredBase, filePath) : fs.existsSync(absolutePath)
         };
     });
 }
@@ -862,6 +885,8 @@ module.exports = {
     rebuildStructuredIndex,
     rebuildStructuredLatestIndex,
     rebuildStructuredDownloadFileIndex,
+    resolveRawBase,
+    originalFileExists,
     upsertStructuredIndex,
     upsertStructuredLatestIndex,
     upsertStructuredDownloadFileIndex

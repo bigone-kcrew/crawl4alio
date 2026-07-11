@@ -1,7 +1,7 @@
 const fs   = require('fs');
 const path = require('path');
 const { fromCatalogRoot } = require('./project/crawler/utils/paths');
-const { rebuildStructuredDownloadFileIndex, DOWNLOAD_FILE_INDEX_FILE_NAME } = require('./project/crawler/utils/structured_explorer');
+const { rebuildStructuredDownloadFileIndex, DOWNLOAD_FILE_INDEX_FILE_NAME, resolveRawBase, originalFileExists } = require('./project/crawler/utils/structured_explorer');
 
 // CONVERTIBLE_EXTS: ZIP 추출 대상 확장자
 const CONVERTIBLE_EXTS = new Set(['.pdf', '.hwp', '.hwpx', '.hwpml', '.xlsx', '.xls', '.docx']);
@@ -39,9 +39,8 @@ function main() {
     let kept = 0;
     for (const [id, entry] of preservedById) {
         if (rebuildIds.has(id)) continue; // rebuild가 최신 정보로 덮어씀
-        // downloaded 상태를 디스크 실제 값으로 갱신
-        const absPath = entry.file_path ? path.join(structuredBase, entry.file_path) : '';
-        const onDisk = absPath ? fs.existsSync(absPath) : (entry.downloaded === true);
+        // downloaded 상태를 디스크 실제 값으로 갱신 (raw 미러 우선, md 폴백)
+        const onDisk = entry.file_path ? originalFileExists(structuredBase, entry.file_path) : (entry.downloaded === true);
         merged.push({ ...entry, downloaded: onDisk });
         kept++;
     }
@@ -54,15 +53,21 @@ function main() {
     const zipAdded = [];
     let zipSkipped = 0;
 
+    const rawBase = resolveRawBase(structuredBase);
     for (const zip of zipEntries) {
-        const absZipPath  = path.join(structuredBase, zip.file_path);
-        const extractDir  = absZipPath.replace(/\.zip$/i, '');
-        if (!fs.existsSync(extractDir)) { zipSkipped++; continue; }
+        // 추출 디렉터리: raw 미러 우선(원본 바이너리 위치), md 폴백(단일 트리 하위호환)
+        const extractRel = zip.file_path.replace(/\.zip$/i, '');
+        const candidates = rawBase
+            ? [{ base: rawBase, dir: path.join(rawBase, extractRel) }, { base: structuredBase, dir: path.join(structuredBase, extractRel) }]
+            : [{ base: structuredBase, dir: path.join(structuredBase, extractRel) }];
+        const hit = candidates.find(c => fs.existsSync(c.dir));
+        if (!hit) { zipSkipped++; continue; }
+        const extractDir = hit.dir;
 
         for (const absFile of walk(extractDir)) {
             const ext = path.extname(absFile).toLowerCase();
             if (!CONVERTIBLE_EXTS.has(ext)) continue;
-            const relPath    = path.relative(structuredBase, absFile);
+            const relPath    = path.relative(hit.base, absFile);
             if (mergedPaths.has(relPath)) continue;
             const zipDirRel  = path.relative(extractDir, absFile);
             const id         = `${zip.apba_id}:${zip.scd}:${zip.disclosure_no}:zip:${zipDirRel}`;

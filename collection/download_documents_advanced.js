@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const yaml = require('js-yaml');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
+const { fromCatalogRoot, fromLogsRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
 const {
     buildDisclosureLookup,
     buildStructuredPaths,
@@ -292,19 +293,19 @@ async function fetchLiveReportRows(apbaId, reportFormRootNo, kindHint) {
 }
 
 async function downloadDocuments() {
-    const institutions = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/institutions.json'), 'utf8'));
-    const disclosureItems = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/disclosure_items.json'), 'utf8'));
+    const institutions = JSON.parse(fs.readFileSync(fromCatalogRoot('institutions.json'), 'utf8'));
+    const disclosureItems = JSON.parse(fs.readFileSync(fromCatalogRoot('disclosure_items.json'), 'utf8'));
     const crawlTargets = yaml.load(fs.readFileSync(path.join(__dirname, 'project/crawler/config/crawl_targets.yaml'), 'utf8'));
     const args = parseArgs(process.argv.slice(2));
     const retryTargets = loadRetryTargets(args.retryTargets);
 
     // report-level 체크포인트 (raw 삭제 후 증분 수집용). SKIP_DOWNLOAD_CKPT=1이면 비활성(샤드 병렬 시).
-    const DL_CKPT = process.env.SKIP_DOWNLOAD_CKPT ? null : (args.ckptPath || path.join(__dirname, '../data/logs/download_ckpt.json'));
+    const DL_CKPT = process.env.SKIP_DOWNLOAD_CKPT ? null : (args.ckptPath || fromLogsRoot('download_ckpt.json'));
     const dlCkpt = DL_CKPT ? loadDownloadCkpt(DL_CKPT) : { done: {} };
     let ckptDirty = 0;
 
     // reports.json은 선택사항 — 없으면 (기관, 공시코드)별 라이브 API 조회로 대체
-    const reportsPath = path.join(__dirname, '../data/reports.json');
+    const reportsPath = fromCatalogRoot('reports.json');
     const reports = fs.existsSync(reportsPath) ? JSON.parse(fs.readFileSync(reportsPath, 'utf8')) : [];
     if (reports.length === 0) {
         logger.info('reports.json 없음 — 공시 목록을 ALIO 라이브 API로 조회합니다.');
@@ -326,7 +327,11 @@ async function downloadDocuments() {
         return;
     }
 
-    const structuredBase = path.join(__dirname, '../data/structured_data');
+    const structuredBase = fromCatalogRoot('structured_data');
+    // 원본 바이너리 저장 루트(raw). 메타(content.json/manifest 등)는 structuredBase(alio-md)에 유지,
+    // 첨부 원본만 alio-raw 미러로 분리. 미지정 시 structuredBase 실경로의 alio-md→alio-raw 치환.
+    const rawBase = process.env.ALIO_RAW_BASE
+        || (() => { try { return fs.realpathSync(structuredBase).replace('/alio-md/', '/alio-raw/'); } catch { return structuredBase; } })();
     const scopedReportFormNos = [...scopedCodes].sort();
     let scopedInstitutions = institutions.filter(inst => {
         if (args.ministry && inst.ministry !== args.ministry) return false;
@@ -384,7 +389,8 @@ async function downloadDocuments() {
                 }
 
                 // 체크포인트 스킵 — 이미 수집한 report는 raw 유무와 무관하게 건너뜀 (idate 변경 시 재처리)
-                if (DL_CKPT && !args.recheck) {
+                // retry-targets로 명시된 report는 개정 재수집이므로 ckpt 우회.
+                if (DL_CKPT && !args.recheck && !allowedDisclosures) {
                     const prev = dlCkpt.done[report.disclosure_no];
                     const idate = String(report.idate || report.critYyyy || '');
                     if (prev && (!prev.idate || !idate || prev.idate === idate)) continue;
@@ -486,7 +492,10 @@ async function downloadDocuments() {
                     toDownload.push(att);
                 }
                 // 첨부 다운로드만 병렬 (ALIO 직결). dedup으로 destPath 유일 → 경합 없음.
-                await runPool(toDownload, ATTACH_CONCURRENCY, att => downloadAttachment(att, yearDir));
+                // 원본 바이너리는 alio-raw 미러 경로로 저장(메타는 alio-md yearDir 유지).
+                const rawYearDir = path.join(rawBase, path.relative(structuredBase, yearDir));
+                fs.mkdirSync(rawYearDir, { recursive: true });
+                await runPool(toDownload, ATTACH_CONCURRENCY, att => downloadAttachment(att, rawYearDir));
 
                 if (attachments.length > 0) {
                     fs.writeFileSync(path.join(yearDir, 'attachments.json'), JSON.stringify(attachments, null, 2));

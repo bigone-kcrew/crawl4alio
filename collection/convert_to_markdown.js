@@ -30,8 +30,11 @@ const yaml   = require('js-yaml');
 // stdout 파이프 끊김 시 프로세스가 종료되지 않도록 SIGPIPE 무시
 process.on('SIGPIPE', () => {});
 
+// 경로는 카탈로그 루트 기준 (CATALOG_ROOT env로 데이터 폴더 전체 이동 가능)
+const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
+
 // TTY 환경: 파일 + stdout 동시 기록 / nohup 리다이렉트 환경: stdout만(nohup이 파일로 연결)
-const LOG_PATH = path.join(__dirname, '../data/logs/conversion_run.log');
+const LOG_PATH = fromLogsRoot('conversion_run.log');
 const IS_TTY   = Boolean(process.stdout.isTTY);
 const _origLog = console.log.bind(console);
 console.log = (...args) => {
@@ -54,6 +57,15 @@ const REQUEST_TIMEOUT_MS        = parseInt(process.env.REQUEST_TIMEOUT_MS       
 const MARKITDOWN_PDF_TIMEOUT_MS = parseInt(process.env.MARKITDOWN_PDF_TIMEOUT_MS || '15000');
 // 변환 결과가 이 글자 수 이하면 "빈 결과"로 간주 (헤더만 있는 경우 등)
 const MIN_CONTENT_CHARS = 20;
+// PDF 품질 게이트: 페이지당 글자 수가 이 값 미만이면 스캔 문서로 보고 ocr_needed 분류
+const PDF_MIN_CHARS_PER_PAGE = parseInt(process.env.PDF_MIN_CHARS_PER_PAGE || '100');
+
+async function pdfPageCount(absPath) {
+  const { PDFDocument } = require('pdf-lib');
+  const buf = fs.readFileSync(absPath);
+  const doc = await PDFDocument.load(buf, { ignoreEncryption: true, updateMetadata: false });
+  return doc.getPageCount();
+}
 
 // ── Parser 라우팅 ───────────────────────────────────────────────────────────────
 // kordoc 지원: hwp3/hwp/hwpx/hwpml, pdf, xls/xlsx, docx (npm 내장 or HTTP)
@@ -81,11 +93,11 @@ const OCR_ERROR_PATTERNS = [
 // ── 경로 ───────────────────────────────────────────────────────────────────────
 
 const ROOT             = path.join(__dirname, '..');
-const STRUCTURED_DIR   = path.join(ROOT, 'data', 'structured_data');
+const STRUCTURED_DIR   = fromCatalogRoot('structured_data');
 const INDEX_PATH       = path.join(STRUCTURED_DIR, 'download_files_index.json');
-const CHECKPOINT_PATH  = path.join(ROOT, 'data', 'logs', 'conversion_checkpoint.json');
-const OCR_NEEDED_PATH  = path.join(ROOT, 'data', 'logs', 'ocr_needed.json');
-const HASH_CACHE_PATH  = path.join(ROOT, 'data', 'logs', 'file_hash_cache.json');
+const CHECKPOINT_PATH  = fromLogsRoot('conversion_checkpoint.json');
+const OCR_NEEDED_PATH  = fromLogsRoot('ocr_needed.json');
+const HASH_CACHE_PATH  = fromLogsRoot('file_hash_cache.json');
 
 // MD 미러 출력 루트 (raw/md 트리 분리 배포용).
 // 미지정 시 기존 동작(원본 파일 옆에 .md 저장) 유지.
@@ -96,9 +108,17 @@ const MD_MIRROR_ROOT = mdRootArgIdx >= 0 && process.argv[mdRootArgIdx + 1]
   ? path.resolve(process.argv[mdRootArgIdx + 1])
   : (process.env.MD_MIRROR_ROOT ? path.resolve(ROOT, process.env.MD_MIRROR_ROOT) : null);
 
+// 원본 바이너리 소스 루트 (raw/md 분리 배포용).
+// 미지정 시 STRUCTURED_DIR(=structured_data) 하위에서 읽던 기존 동작 유지.
+//   node collection/convert_to_markdown.js --raw-root /workspace/alio/2_data/alio-raw/자료/기관별공시
+const rawRootArgIdx = process.argv.indexOf('--raw-root');
+const RAW_SOURCE_ROOT = rawRootArgIdx >= 0 && process.argv[rawRootArgIdx + 1]
+  ? path.resolve(process.argv[rawRootArgIdx + 1])
+  : (process.env.RAW_SOURCE_ROOT ? path.resolve(ROOT, process.env.RAW_SOURCE_ROOT) : STRUCTURED_DIR);
+
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 
-const LOCK_PATH = path.join(__dirname, '../data/logs/convert_main.lock');
+const LOCK_PATH = fromLogsRoot('convert_main.lock');
 
 function acquireLock() {
   if (fs.existsSync(LOCK_PATH)) {
@@ -241,10 +261,11 @@ async function convertFile(entry, ckpt) {
   if (ckpt.files[id]) return;
 
   const ext     = file_name.split('.').pop().toLowerCase();
-  const absPath = path.join(STRUCTURED_DIR, file_path);
-  const outputPath = MD_MIRROR_ROOT
-    ? path.join(MD_MIRROR_ROOT, file_path).replace(/\.[^.]+$/, '.md')
-    : absPath.replace(/\.[^.]+$/, '.md');
+  const absPath = path.join(RAW_SOURCE_ROOT, file_path);           // 원본(raw 분리 시 alio-raw)
+  // 변환 출력은 항상 md 트리(STRUCTURED_DIR) 기준 — raw 분리 시 .md가 raw에 떨어지는 것 방지
+  const outputPath = (MD_MIRROR_ROOT
+    ? path.join(MD_MIRROR_ROOT, file_path)
+    : path.join(STRUCTURED_DIR, file_path)).replace(/\.[^.]+$/, '.md');
   const parsers = ROUTING[ext];
   const meta = { institution_name, ministry, apba_id, scd, item_name,
                  year, source_url, minor_category, original_file: file_name };
@@ -252,6 +273,13 @@ async function convertFile(entry, ckpt) {
   if (DRY_RUN) {
     log(id, 'DRY', `${ext} → ${parsers.join(' → ')}`);
     ckpt.files[id] = { status: 'dry', processed_at: new Date().toISOString() };
+    return;
+  }
+
+  // 원본 부재(무가치 정리로 삭제됐거나 미수집) → 실패 아닌 skip 집계.
+  if (!fs.existsSync(absPath)) {
+    ckpt.files[id] = { status: 'skipped_missing', processed_at: new Date().toISOString() };
+    log(id, 'SKIP', 'source missing');
     return;
   }
 
@@ -317,6 +345,18 @@ async function convertFile(entry, ckpt) {
       needsOcr = true;
       lastError = 'empty_content';
       break;
+    }
+
+    // PDF 품질 게이트: 페이지당 글자 수 기준 저품질(스캔 문서) → OCR 대기
+    if (ext === 'pdf') {
+      try {
+        const pages = await pdfPageCount(absPath);
+        if (pages >= 1 && md.length / pages < PDF_MIN_CHARS_PER_PAGE) {
+          needsOcr = true;
+          lastError = `low_quality_${parser} (${md.length}자/${pages}p)`;
+          break;
+        }
+      } catch { /* pdf-lib 부재·페이지 수 파악 실패 시 게이트 생략 */ }
     }
 
     markdown   = md;
