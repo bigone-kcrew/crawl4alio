@@ -11,7 +11,7 @@
 1. **ALIO 경영공시 수집** — 355개 공공기관 × 전체 92개 공시항목(정기/수시 자동 구분). 공시항목(`--scope all|--categories|--items`)과 기관(`--ministry|--apba-ids|--inst-type`)을 자유롭게 선택. 본문 가치 없는 문서첨부형 항목은 `--attach-only-items`로 crawl4ai 스킵(첨부만 수집, 대량 항목 대폭 가속)
 2. **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 항목 전담: **국회 지적사항(B1210)·감사원 등 지적(B1220)**은 본문(`내용.md`)+첨부, **경영평가결과(B1230/B1250)**는 첨부(`collect_board_disclosures.js`), **채용공고(B1010/B1020)**는 게시글+첨부 전량(`collect_recruit_attachments.js`, posting 체크포인트·병렬)
 3. **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락 공시만 수집 (`sync_alio.js`: 반자동 report / 자동 apply, `sync_legal.js`: 법령 개정 감지). 다운로더는 disclosureNo **report 체크포인트**로 raw를 오프사이트로 옮겨 삭제한 뒤에도 증분 수집 가능
-4. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), 그 외 부처 지침은 크롤링+변환
+4. **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+**별표·서식(붙임)** 구조화 수집, 검색 기반 법령 추가(`add_legal_source.js`), **ALIO 법령/지침 게시판**(`collect_alio_lawboard.js`: 기재부 지침류 개정 이력 — 예산운용지침·통합공시기준·혁신지침 등, 2018~현재), 그 외 부처 지침은 크롤링+변환
 5. **기관 내부규정 수집** — ALIO `21110` 게시판에서 기관별 규정 수집 (최신본 또는 `--all-files`로 개정 이력 전체)
 6. **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX 등을 kordoc → markitdown → PaddleOCR(스캔 문서) 순으로 폴백하며 변환. ZIP 자동 해제(`extract_zips.js`), raw/md 미러 출력(`--md-root`) 지원
 
@@ -28,6 +28,7 @@
 | | `collect_recruit_attachments.js` | B1010/B1020 채용공고 | 게시글 병렬 + posting 체크포인트 |
 | | `collect_institution_bylaws.js` | 21110 기관 내부규정 | 게시판 + 최신본/`--all-files` |
 | **④ 별도 소스** | `collect_legal_corpus.js` / `sync_legal.js` | 법령·행정규칙(개정 감지) | law.go.kr DRF API |
+| | `collect_alio_lawboard.js` | ALIO 법령/지침 게시판(기재부 지침 개정 이력) | `findEtcLawList/Dtl.json` GET + fileNo 다운로드, boardNo ckpt |
 
 모든 계층이 `CATALOG_ROOT` 하나로 데이터 루트를 공유한다(목록·수집물·체크포인트·로그).
 
@@ -60,6 +61,19 @@ flowchart LR
 - **첨부전용 모드**(`--attach-only-items`): 본문이 메타데이터뿐인 문서첨부형 항목(이사회·감사보고서 등)은 crawl4ai를 건너뛰고 첨부만 수집 → crawl4ai 병목 대폭 완화. 본문 유무는 항목별로 실측 판단 필요(재무제표처럼 본문 표가 있는 항목은 유지).
 - **report 체크포인트**(`data/logs/download_ckpt.json`): disclosureNo 기준으로 이미 수집한 report를 raw 유무와 무관하게 스킵 → raw 오프사이트 아카이브 후 로컬 삭제해도 증분 수집. `--recheck`로 강제 재처리, `--ckpt`로 경로 지정. 채용/게시판은 이미 posting-level 체크포인트(`formNo:apbaId:idx`+idate).
 - **안정성 수정**: 체크포인트 atomic write(tmp→rename) race 방지 / 게시판형(disclosureNo=0000) 목록이 기관당 1건으로 접히던 dedup 버그(→ `disclosureNo|idx` 키) / 긴 한글 파일명 ENAMETOOLONG(바이트 절단 + 단건 오류 격리) / alio keep-alive 종료 socket hang up 재시도(Connection: close).
+
+### 대규모 운영에서 배운 것 (v1.3.1)
+
+실수집 32만+ 파일(76GB) 운영에서 겪은 시행착오와 그 반영:
+
+- **raw(수집원본)/md(변환·메타) 트리 분리는 "모든" 수집기가 지켜야 한다** — 다운로더는 md 트리에 원본을 쓰고, 게시판 수집기는 raw 트리에 본문·메타를 쓰는 식으로 갈리면 ①검색·RAG가 게시판 본문을 못 보고 ②raw 오프사이트(삭제)가 불가능해진다. 현재 전 수집기가 첨부=raw / 본문·manifest=md로 통일.
+- **"디스크에 파일 있음"을 수집·변환의 유일한 진실로 쓰지 말 것** — 인덱스의 `downloaded`를 md 트리 기준 existsSync로 판정하면 raw 분리 순간 전부 false가 되어 변환 대상 0건으로 붕괴한다. 판정은 raw 우선+md 폴백(`originalFileExists`), 수집 스킵은 디스크가 아닌 체크포인트(disclosureNo/posting) 기준.
+- **체크포인트는 "만들었다"가 아니라 "채워져 있다"까지 확인** — 샤드 병렬은 `SKIP_DOWNLOAD_CKPT=1`로 돌므로 ckpt가 빈 채 남는다. raw를 지우기 전 `seed_download_ckpt.js`로 기수집 manifest에서 백필(1회).
+- **재수집 경로는 체크포인트를 우회해야 한다** — 개정 감지(retry-targets)가 ckpt에 막히면 개정본을 영원히 못 받는다.
+- **스크립트 사본 이중화가 사고의 근원** — 저장소 코드와 데이터 폴더는 `CATALOG_ROOT`로 분리하고 사본을 만들지 않는다. 사본이 갈라지면 서로 다른 체크포인트를 보고 전량 재변환(수일)이나 오배치 사고가 난다.
+- **PDF 텍스트 추출 "성공"을 믿지 말 것** — 스캔 PDF도 kordoc이 빈 텍스트로 성공 반환한다. 페이지당 글자 수 게이트(`PDF_MIN_CHARS_PER_PAGE`)로 저품질을 ocr_needed로 돌린다.
+- **파일명·연도 정규화는 인덱스에 흔적을 남긴다** — 폴더 리네이밍(UnknownYear→연도) 후 옛 경로 엔트리가 인덱스에 남는다. 재빌드는 manifest 기반으로 정정하고, 변환기는 원본 부재를 실패가 아닌 `skipped_missing`으로 집계해 통계 오염을 막는다.
+- **게시판형은 항목마다 API가 다르다** — PTOT(B1210/B1220)=본문+pfile.json, COMM(B1230/B1250·채용)=fileNo, 법령/지침 게시판=GET json. 신규 게시판은 페이지 JS에서 axios 호출을 리버싱하면 대부분 단순 json API다.
 
 > **참고**: ALIO 상세 데이터(감사·이사회·재무 등 대부분)는 여전히 crawl4ai로 수집합니다. `opendata.alio.go.kr` / data.go.kr 오픈API는 채용·시설·사업·기관 4종 정보만 제공하므로 전체 공시 대체가 되지 않습니다.
 
