@@ -12,7 +12,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const ROOT     = path.join(__dirname, '..');
-const MD_ROOT  = process.env.MD_ROOT || path.join(ROOT, 'data', 'alio-md');
+const MD_ROOT  = process.env.MD_ROOT || path.join(require('./project/crawler/utils/paths').catalogRoot, 'alio-md');
 const LOG_DIR  = path.join(path.dirname(MD_ROOT), 'logs');
 const CKPT_PATH = path.join(LOG_DIR, 'postprocess_ocr_ckpt.json');
 const LOG_PATH  = path.join(LOG_DIR, 'postprocess_ocr.log');

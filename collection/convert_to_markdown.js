@@ -94,7 +94,11 @@ const OCR_ERROR_PATTERNS = [
 
 const ROOT             = path.join(__dirname, '..');
 const STRUCTURED_DIR   = fromCatalogRoot('structured_data');
-const INDEX_PATH       = path.join(STRUCTURED_DIR, 'download_files_index.json');
+// --index <path>: 변환 입력 인덱스 교체 (예: 게시판 첨부 전용 board_files_index.json)
+const indexArgIdx = process.argv.indexOf('--index');
+const INDEX_PATH       = indexArgIdx >= 0 && process.argv[indexArgIdx + 1]
+  ? path.resolve(process.argv[indexArgIdx + 1])
+  : path.join(STRUCTURED_DIR, 'download_files_index.json');
 const CHECKPOINT_PATH  = fromLogsRoot('conversion_checkpoint.json');
 const OCR_NEEDED_PATH  = fromLogsRoot('ocr_needed.json');
 const HASH_CACHE_PATH  = fromLogsRoot('file_hash_cache.json');

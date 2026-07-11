@@ -39,6 +39,8 @@ function main() {
     let kept = 0;
     for (const [id, entry] of preservedById) {
         if (rebuildIds.has(id)) continue; // rebuild가 최신 정보로 덮어씀
+        // 기관정보 없는 오염 엔트리(게시판 메타 오인 혼입, id '::…') 승계 차단
+        if (!id || id.startsWith('::')) continue;
         // downloaded 상태를 디스크 실제 값으로 갱신 (raw 미러 우선, md 폴백)
         const onDisk = entry.file_path ? originalFileExists(structuredBase, entry.file_path) : (entry.downloaded === true);
         merged.push({ ...entry, downloaded: onDisk });
