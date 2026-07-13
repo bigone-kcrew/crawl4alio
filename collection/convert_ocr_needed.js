@@ -43,10 +43,16 @@ const STRUCTURED_DIR  = fromCatalogRoot('structured_data');
 const INDEX_PATH      = path.join(STRUCTURED_DIR, 'download_files_index.json');
 const MAIN_CKPT_PATH  = fromLogsRoot('conversion_checkpoint.json');
 // 메인 변환과 충돌 방지: OCR 전용 별도 체크포인트 사용
-const OCR_CKPT_PATH   = fromLogsRoot('ocr_checkpoint.json');
+// 듀얼 PC 병렬 시 인스턴스별 분리: OCR_CKPT_PATH / OCR_LOCK_PATH env로 override
+const OCR_CKPT_PATH   = process.env.OCR_CKPT_PATH || fromLogsRoot('ocr_checkpoint.json');
 const OCR_NEEDED_PATH = fromLogsRoot('ocr_needed.json');
+// 출력 .md 경로: 원본 바이너리는 alio-raw, .md는 alio-md에 기록(2026-07-11 raw/md 분리 정합).
+// 이 매핑이 없으면 .md가 alio-raw로 잘못 기록됨(2026-07-13 버그 수정).
+function toMdOutput(absPath) {
+  return absPath.replace('/alio-raw/', '/alio-md/').replace(/\.(pdf)$/i, '.md');
+}
 // 중복 실행 방지용 락파일
-const LOCK_PATH       = fromLogsRoot('ocr_convert.lock');
+const LOCK_PATH       = process.env.OCR_LOCK_PATH || fromLogsRoot('ocr_convert.lock');
 
 // ── 인스턴스 락 (중복 실행 방지) ──────────────────────────────────────────────
 function acquireLock() {
@@ -202,10 +208,8 @@ async function callPaddleOcr(parseUrl, absPath, timeoutMs) {
     if (!result) {
       const errInfo = raw && typeof raw === 'object'
         ? (raw?.error?.message || raw?.message || JSON.stringify(raw).slice(0, 100))
-        : '빈 응답';
-      console.log(`  [청크] ${start + 1}~${end}p 실패: ${errInfo}`);
-      parts.push('');
-      continue;
+        : 'OCR 결과 없음';
+      throw new Error(`청크 ${start + 1}~${end}p: ${errInfo}`);
     }
     console.log(`  [청크] ${start + 1}~${end}p 완료 (${result.length}chars)`);
     // 페이지 번호 오프셋 조정: - N - 와 <!-- page: N --> 를 start 만큼 증가
@@ -378,7 +382,7 @@ async function main() {
     const mb    = size / (1024 * 1024);
     const score = Math.max(mb * 60, pages > 0 ? pages * 20 : mb * 60);
     const base  = { id: item.id, file_path: item.file_path, reason: item.reason, size, pages, score };
-    const outputPath = item.file_path.replace(/\.pdf$/i, '.md');
+    const outputPath = toMdOutput(item.file_path);
 
     if (fs.existsSync(outputPath)) {
       dedupItemsPre.push(base);
@@ -403,9 +407,20 @@ async function main() {
   if (fs.existsSync(PRIORITY_PATH)) {
     try { JSON.parse(fs.readFileSync(PRIORITY_PATH,'utf8')).paths.forEach(p => prioritySet.add(p)); } catch {}
   }
-  const priorityItems  = ocrCanonicals.filter(i => prioritySet.has(i.file_path));
-  const normalItems    = ocrCanonicals.filter(i => !prioritySet.has(i.file_path));
-  normalItems.sort((a, b) => a.score - b.score);  // 작은 파일 먼저
+  // 듀얼 PC 정적 분할: 페이지 밴드로 인스턴스 담당 구간 제한(겹침 0). 예) PC1: 1~120p, PC2: 121p~
+  const PAGE_MIN = parseInt(process.env.OCR_PAGE_MIN || '0', 10);
+  const PAGE_MAX = parseInt(process.env.OCR_PAGE_MAX || '0', 10) || Infinity;
+  const bandFilter = (i) => {
+    const pg = i.pages > 0 ? i.pages : 1; // 페이지 불명이면 1p로 간주(소형 밴드)
+    return pg >= PAGE_MIN && pg <= PAGE_MAX;
+  };
+  const priorityItems  = ocrCanonicals.filter(i => prioritySet.has(i.file_path) && bandFilter(i));
+  const normalItems    = ocrCanonicals.filter(i => !prioritySet.has(i.file_path) && bandFilter(i));
+  // OCR_ORDER=asc → 소형(고가치)부터, 기본 desc → 대형부터
+  const asc = (process.env.OCR_ORDER || 'desc').toLowerCase() === 'asc';
+  normalItems.sort((a, b) => asc ? a.score - b.score : b.score - a.score);
+  if (PAGE_MIN || PAGE_MAX !== Infinity) console.log(`  페이지 밴드: ${PAGE_MIN}~${PAGE_MAX === Infinity ? '∞' : PAGE_MAX}p → ${normalItems.length + priorityItems.length}건`);
+  console.log(`  정렬: ${asc ? '오름차순(소형 먼저)' : '내림차순(대형 먼저)'}`);
   if (priorityItems.length) console.log(`  우선처리 ${priorityItems.length}건 (priority_ocr.json)`);
   const ocrItems = [...dedupItemsPre, ...priorityItems, ...normalItems, ...cdedupPending];
 
@@ -454,7 +469,7 @@ async function main() {
 
     const sizeBytes = (() => { try { return fs.statSync(ocrPath).size; } catch { return 0; } })();
     const timeoutMs = buildTimeout(sizeBytes, ocrPath);
-    const outputPath = absPath.replace(/\.pdf$/i, '.md');
+    const outputPath = toMdOutput(absPath);
 
     // 동일 경로 .md가 이미 존재하면 OCR 재호출 없이 체크포인트만 기록
     if (fs.existsSync(outputPath)) {

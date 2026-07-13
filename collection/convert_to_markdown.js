@@ -69,14 +69,14 @@ async function pdfPageCount(absPath) {
 
 // ── Parser 라우팅 ───────────────────────────────────────────────────────────────
 // kordoc 지원: hwp3/hwp/hwpx/hwpml, pdf, xls/xlsx, docx (npm 내장 or HTTP)
-// markitdown은 MARKITDOWN_PARSE_URL 설정 시에만 폴백으로 사용 (pptx는 markitdown 전용)
+// markitdown은 xlsx/xls/pptx 전용 — pdf·hwp 계열은 kordoc 실패 시 PaddleOCR(ocr_needed)로 직행
 const ROUTING = {
-  hwp:   ['kordoc', 'markitdown'],
-  hwpx:  ['kordoc', 'markitdown'],
-  hwpml: ['kordoc', 'markitdown'],
-  pdf:   ['kordoc', 'markitdown'],
+  hwp:   ['kordoc'],
+  hwpx:  ['kordoc'],
+  hwpml: ['kordoc'],
+  pdf:   ['kordoc'],
   xlsx:  ['kordoc', 'markitdown'],
-  docx:  ['kordoc', 'markitdown'],
+  docx:  ['kordoc'],
   xls:   ['kordoc', 'markitdown'],
   pptx:  ['markitdown'],
 };
@@ -363,10 +363,12 @@ async function convertFile(entry, ckpt) {
     }
 
     // PDF 품질 게이트: 페이지당 글자 수 기준 저품질(스캔 문서) → OCR 대기
+    // 단일 페이지 문서는 내용 자체가 짧을 수 있으므로 70자로 완화
     if (ext === 'pdf') {
       try {
         const pages = await pdfPageCount(absPath);
-        if (pages >= 1 && md.length / pages < PDF_MIN_CHARS_PER_PAGE) {
+        const threshold = pages === 1 ? 70 : PDF_MIN_CHARS_PER_PAGE;
+        if (pages >= 1 && md.length / pages < threshold) {
           needsOcr = true;
           lastError = `low_quality_${parser} (${md.length}자/${pages}p)`;
           break;

@@ -29,6 +29,7 @@ const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] 
 const ROOT = path.resolve(opt('--root', fromCatalogRoot('structured_data')));
 const DRY = flag('--dry');
 const FORCE = flag('--force');
+const KEEP_ZIP = flag('--keep-zip'); // 기본: 해제 성공 후 원본 ZIP 삭제
 const PY_EXTRACTOR = path.join(__dirname, 'extract_zip.py');
 
 function walk(dir, out = []) {
@@ -49,7 +50,14 @@ function main() {
   const stat = { extracted: 0, skipped: 0, failed: 0 };
   for (const zipPath of zips) {
     const extractDir = zipPath.replace(/\.zip$/i, '');
-    if (!FORCE && fs.existsSync(extractDir)) { stat.skipped++; continue; }
+    if (!FORCE && fs.existsSync(extractDir)) {
+      // 이미 해제됨 — ZIP 원본 정리
+      if (!KEEP_ZIP && !DRY && fs.existsSync(zipPath)) {
+        try { fs.unlinkSync(zipPath); } catch {}
+      }
+      stat.skipped++;
+      continue;
+    }
 
     const rel = path.relative(ROOT, zipPath);
     if (DRY) { console.log(`  [DRY] ${rel}`); stat.extracted++; continue; }
@@ -57,7 +65,10 @@ function main() {
     const run = spawnSync('python3', [PY_EXTRACTOR, zipPath, extractDir], { encoding: 'utf8' });
     if (run.status === 0) {
       const count = fs.existsSync(extractDir) ? fs.readdirSync(extractDir).length : 0;
-      console.log(`  ✅ ${rel} → ${count}개 항목`);
+      if (!KEEP_ZIP) {
+        try { fs.unlinkSync(zipPath); } catch {}
+      }
+      console.log(`  ✅ ${rel} → ${count}개 항목${KEEP_ZIP ? '' : ' (zip 삭제)'}`);
       stat.extracted++;
     } else {
       console.log(`  ❌ ${rel}: ${(run.stdout || run.stderr || '').trim().slice(0, 120)}`);
