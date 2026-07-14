@@ -9,6 +9,21 @@
  *   node collection/convert_ocr_needed.js
  *   node collection/convert_ocr_needed.js --dry-run
  *   PADDLEOCR_PARSE_URL=http://... node collection/convert_ocr_needed.js
+ *
+ * 다중 PC OCR 스케일아웃 env (정적 분할, 겹침·누락 0):
+ *   OCR_ORDER            asc(소형 먼저)/desc(대형 먼저)
+ *   OCR_BAND             담당 밴드(상보). safe↔risky(권장) / light↔heavy(크기) / small↔big(크기+페이지)
+ *   OCR_BAND_SIZE_MAX_MB 메모리 안전 경계(기본 0.9). 초과=고해상도 위험 → risky(고RAM)
+ *   OCR_BAND_DENSITY_MAX 저밀도(MB/page) 임계(기본 0.5) — 대용량이라도 저밀도·다페이지면 safe 허용
+ *   OCR_BAND_MIN_PAGES   safe 허용 최소 페이지(기본 3)
+ *   OCR_SPLIT_PAGES      페이지 균형점(>0). 이 페이지수 이상은 risky로 강제 → 느린 PC 과부하 방지
+ *   OCR_CHUNK_PAGES      요청당 페이지(기본 50; 저RAM는 6~8)
+ *   OCR_MAX_TIMEOUT      요청 타임아웃 상한(ms). 스왑유발 문서 무한대기 방지 fail-fast(hang 방지)
+ *   OCR_QUARANTINE_PATH  OOM 유발 문서 목록(safe서 제외/risky서 포함) — 자기치유 격리
+ *   OCR_INFLIGHT_PATH    처리 중 문서 경로 기록(외부 워치독이 hang 시 격리 대상 식별)
+ *   OCR_CKPT_PATH / OCR_LOCK_PATH   인스턴스별 체크포인트·락 분리
+ *   OCR_PAGE_MIN / OCR_PAGE_MAX     (레거시) 페이지 밴드
+ *   ※ 서버측 hang 방지는 deploy/paddleocr-parser(OCR_SELF_KILL_RSS_MB/_HANG_S)의 self-watchdog 참조.
  */
 
 'use strict';
@@ -138,9 +153,14 @@ function buildTimeout(bytes, filePath) {
   // 페이지 기반: 페이지당 20초 (스캔 PDF OCR 처리 시간)
   const pageBased = pages > 0 ? pages * 20_000 : 0;
   // 최소 1800s: 34p 파일 실측 ~900s, 50p 청크 기준 여유 확보
-  const base = Math.max(1_800_000, Math.min(Math.max(sizeBased, pageBased), 5_400_000));
+  let base = Math.max(1_800_000, Math.min(Math.max(sizeBased, pageBased), 5_400_000));
+  // OCR_MAX_TIMEOUT(ms): 저사양 인스턴스가 초대형(스왑유발) 문서에 무한대기 않고 빨리 실패→스킵하도록 상한.
+  const cap = parseInt(process.env.OCR_MAX_TIMEOUT || '0', 10);
+  if (cap > 0) base = Math.min(base, cap);
   return Math.round(base * TIMEOUT_MULTIPLIER);
 }
+// 청크 타임아웃도 캡 적용(저사양 인스턴스)
+const OCR_MAX_TIMEOUT = parseInt(process.env.OCR_MAX_TIMEOUT || '0', 10);
 
 // 5MB 이상은 대형 파일로 분류 (후순위 처리)
 const LARGE_FILE_THRESHOLD_BYTES = parseInt(process.env.LARGE_FILE_MB || '5') * 1024 * 1024;
@@ -173,7 +193,8 @@ async function callPaddleOcrBuffer(parseUrl, buffer, filename, timeoutMs) {
 }
 
 // 50페이지 초과 PDF는 청크로 분할해서 처리 후 합침 (서버 max_pdf_pages=100 기준)
-const CHUNK_MAX_PAGES = 50;
+// 청크 크기: 서버 요청당 렌더 이미지 수 = 피크 메모리. 저RAM 서버는 OCR_CHUNK_PAGES로 낮춤.
+const CHUNK_MAX_PAGES = Math.max(1, parseInt(process.env.OCR_CHUNK_PAGES || '50', 10) || 50);
 
 async function callPaddleOcr(parseUrl, absPath, timeoutMs) {
   const { PDFDocument } = require('pdf-lib');
@@ -199,7 +220,7 @@ async function callPaddleOcr(parseUrl, absPath, timeoutMs) {
     const pages = await chunk.copyPages(pdfDoc, Array.from({length: end - start}, (_, i) => start + i));
     pages.forEach(p => chunk.addPage(p));
     const chunkBuf = Buffer.from(await chunk.save());
-    const chunkTimeout = Math.max(900_000, timeoutMs);  // 청크별 전체 타임아웃 유지
+    const chunkTimeout = OCR_MAX_TIMEOUT > 0 ? Math.min(OCR_MAX_TIMEOUT, Math.max(900_000, timeoutMs)) : Math.max(900_000, timeoutMs);  // 청크별 타임아웃(캡 적용)
     console.log(`  [청크] ${start + 1}~${end}p 처리 중...`);
     const raw = await callPaddleOcrBuffer(parseUrl, chunkBuf, filename, chunkTimeout);
     // 서버는 JSON 객체({result:{markdown:...}}) 또는 문자열 반환 가능
@@ -407,19 +428,55 @@ async function main() {
   if (fs.existsSync(PRIORITY_PATH)) {
     try { JSON.parse(fs.readFileSync(PRIORITY_PATH,'utf8')).paths.forEach(p => prioritySet.add(p)); } catch {}
   }
-  // 듀얼 PC 정적 분할: 페이지 밴드로 인스턴스 담당 구간 제한(겹침 0). 예) PC1: 1~120p, PC2: 121p~
+  // 듀얼 PC 정적 분할. OCR_BAND으로 상보 분할(누락 0, light⊕heavy 또는 small⊕big):
+  //  light = mb<=M (페이지 무관)  — 저해상도라 청킹 시 저RAM 인스턴스도 안전. 긴 텍스트 문서 포함.
+  //  heavy = mb>M                 — 고해상도/대용량, OOM 위험 → 고RAM 인스턴스 전담.
+  //  small = pages<=P AND mb<=M   (구 방식) / big = NOT small
+  //  ※ 저RAM 인스턴스 OOM은 페이지수가 아니라 페이지당 해상도(≈총 크기)가 원인 → 크기 단일축(light/heavy)이 더 정확·균형.
+  // OCR_BAND 미지정 시 기존 페이지밴드(OCR_PAGE_MIN/MAX) 호환.
+  const BAND = (process.env.OCR_BAND || '').toLowerCase();
+  const P = parseInt(process.env.OCR_BAND_PAGE_MAX || '100', 10);
+  const M = parseFloat(process.env.OCR_BAND_SIZE_MAX_MB || '0.9');
+  const isSmall = (i) => { const pg = i.pages > 0 ? i.pages : 1; const mb = (i.size || 0) / 1048576; return pg <= P && mb <= M; };
+  const isHeavy = (i) => ((i.size || 0) / 1048576) > M;
+  // safe/risky 밀도 라우팅: 저밀도 다페이지 heavy는 소청크로 저RAM 인스턴스가 소화 가능.
+  //  MB/page(압축)는 OOM 완벽 예측 못함(스톨러 사례) → 격리목록으로 오분류분을 고RAM 인스턴스로 강제 이관(자기치유).
+  const DMAX  = parseFloat(process.env.OCR_BAND_DENSITY_MAX || '0.5');   // MB/page 상한
+  const MINPG = parseInt(process.env.OCR_BAND_MIN_PAGES || '3', 10);      // 청킹 이점 위한 최소 페이지
+  const mbpp = (i) => ((i.size || 0) / 1048576) / Math.max(i.pages > 0 ? i.pages : 1, 1);
+  const isMediumSafe = (i) => isHeavy(i) && (i.pages || 0) >= MINPG && mbpp(i) <= DMAX;
+  const quarantine = new Set();
+  if (process.env.OCR_QUARANTINE_PATH && fs.existsSync(process.env.OCR_QUARANTINE_PATH)) {
+    try { fs.readFileSync(process.env.OCR_QUARANTINE_PATH, 'utf8').split('\n').map(s => s.trim()).filter(Boolean).forEach(p => quarantine.add(p)); } catch {}
+  }
+  // 페이지 균형 분기: 큰 문서(pages>=SPLIT_PG)는 빠른(고RAM) 인스턴스(risky)로 → 느린(저RAM) 인스턴스 과부하 방지.
+  const SPLIT_PG = parseInt(process.env.OCR_SPLIT_PAGES || '0', 10);
+  const isSafe = (i) => {
+    if (quarantine.has(i.file_path)) return false;          // 격리 → risky(고RAM) 강제
+    if (isHeavy(i) && !isMediumSafe(i)) return false;       // 고밀도(OOM위험) → risky(고RAM)
+    if (SPLIT_PG > 0 && (i.pages > 0 ? i.pages : 1) >= SPLIT_PG) return false;  // 대형 페이지 → risky(균형)
+    return true;
+  };
   const PAGE_MIN = parseInt(process.env.OCR_PAGE_MIN || '0', 10);
   const PAGE_MAX = parseInt(process.env.OCR_PAGE_MAX || '0', 10) || Infinity;
-  const bandFilter = (i) => {
-    const pg = i.pages > 0 ? i.pages : 1; // 페이지 불명이면 1p로 간주(소형 밴드)
-    return pg >= PAGE_MIN && pg <= PAGE_MAX;
-  };
+  const bandFilter = BAND === 'small' ? isSmall
+    : BAND === 'big' ? (i => !isSmall(i))
+    : BAND === 'light' ? (i => !isHeavy(i))
+    : BAND === 'heavy' ? isHeavy
+    : BAND === 'safe' ? isSafe
+    : BAND === 'risky' ? (i => !isSafe(i))
+    : (i => { const pg = i.pages > 0 ? i.pages : 1; return pg >= PAGE_MIN && pg <= PAGE_MAX; });
   const priorityItems  = ocrCanonicals.filter(i => prioritySet.has(i.file_path) && bandFilter(i));
   const normalItems    = ocrCanonicals.filter(i => !prioritySet.has(i.file_path) && bandFilter(i));
   // OCR_ORDER=asc → 소형(고가치)부터, 기본 desc → 대형부터
   const asc = (process.env.OCR_ORDER || 'desc').toLowerCase() === 'asc';
   normalItems.sort((a, b) => asc ? a.score - b.score : b.score - a.score);
-  if (PAGE_MIN || PAGE_MAX !== Infinity) console.log(`  페이지 밴드: ${PAGE_MIN}~${PAGE_MAX === Infinity ? '∞' : PAGE_MAX}p → ${normalItems.length + priorityItems.length}건`);
+  if (BAND) {
+    const desc = (BAND === 'safe' || BAND === 'risky') ? `M<=${M}MB ∪ 저밀도(≥${MINPG}p,≤${DMAX}MB/p), 격리 ${quarantine.size}건`
+      : (BAND === 'light' || BAND === 'heavy') ? `M<=${M}MB` : `P<=${P}, M<=${M}MB`;
+    console.log(`  밴드: ${BAND}(${desc}) → ${normalItems.length + priorityItems.length}건`);
+  }
+  else if (PAGE_MIN || PAGE_MAX !== Infinity) console.log(`  페이지 밴드: ${PAGE_MIN}~${PAGE_MAX === Infinity ? '∞' : PAGE_MAX}p → ${normalItems.length + priorityItems.length}건`);
   console.log(`  정렬: ${asc ? '오름차순(소형 먼저)' : '내림차순(대형 먼저)'}`);
   if (priorityItems.length) console.log(`  우선처리 ${priorityItems.length}건 (priority_ocr.json)`);
   const ocrItems = [...dedupItemsPre, ...priorityItems, ...normalItems, ...cdedupPending];
@@ -439,6 +496,7 @@ async function main() {
 
   let success = 0, failed = 0, skipped = 0;
   const now = () => new Date().toISOString().slice(11, 19);
+  const INFLIGHT_PATH = process.env.OCR_INFLIGHT_PATH || '';   // OCR 호출 직전 현재 문서 경로 기록(워치독 격리용)
 
   for (let i = 0; i < ocrItems.length; i++) {
     const item   = ocrItems[i];
@@ -497,6 +555,7 @@ async function main() {
 
     if (compPath) console.log(`  [압축본 사용] ${path.basename(compPath)}`);
 
+    if (INFLIGHT_PATH) { try { fs.writeFileSync(INFLIGHT_PATH, absPath); } catch {} }
     const t0 = Date.now();
     let data;
     try {

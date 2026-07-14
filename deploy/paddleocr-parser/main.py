@@ -25,6 +25,50 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI(title="paddleocr-parser")
 
+
+# ── 자가복구(선택): RSS 초과 또는 요청 hang 시 프로세스 self-exit → 컨테이너 restart로 재기동 ──
+#    저RAM 다중 PC 스케일아웃에서 드물게 OOM/hang을 유발하는 문서에 무인 대응.
+#    0=비활성(기본). 저RAM 인스턴스에서 OCR_SELF_KILL_RSS_MB(예 4200)·_HANG_S(예 600) 설정 권장.
+#    predict()가 GIL을 놓으므로 데몬 스레드가 감시 가능; os._exit는 어느 스레드에서든 즉시 종료.
+import time as _time
+import threading as _threading
+
+_SELF_KILL_RSS_MB = float(os.environ.get("OCR_SELF_KILL_RSS_MB", "0"))
+_SELF_KILL_HANG_S = float(os.environ.get("OCR_SELF_KILL_HANG_S", "0"))
+_req_started_at = {"t": 0.0}
+
+
+def _mark_busy():
+    _req_started_at["t"] = _time.time()
+
+
+def _mark_idle():
+    _req_started_at["t"] = 0.0
+
+
+def _rss_mb():
+    try:
+        with open("/proc/self/statm") as f:
+            return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE") / 1048576.0
+    except Exception:
+        return 0.0
+
+
+def _self_watchdog():
+    while True:
+        _time.sleep(15)
+        started = _req_started_at["t"]
+        hung = _SELF_KILL_HANG_S > 0 and started > 0 and (_time.time() - started > _SELF_KILL_HANG_S)
+        over = _SELF_KILL_RSS_MB > 0 and _rss_mb() > _SELF_KILL_RSS_MB
+        if over or hung:
+            print(f"[self-watchdog] self-exit (rss={_rss_mb():.0f}MB, hung={hung}) -> container restart", flush=True)
+            os._exit(137)
+
+
+if _SELF_KILL_RSS_MB > 0 or _SELF_KILL_HANG_S > 0:
+    _threading.Thread(target=_self_watchdog, daemon=True).start()
+# ── 자가복구 끝 ──
+
 _pipeline = None
 _pipeline_lock = threading.Lock()
 _pipeline_error = None
@@ -76,6 +120,7 @@ async def parse(file: UploadFile = File(...)):
     suffix = os.path.splitext(file.filename or "input.pdf")[1] or ".pdf"
     tmp_path = None
     try:
+        _mark_busy()
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
@@ -103,5 +148,6 @@ async def parse(file: UploadFile = File(...)):
             content={"ok": False, "error": {"code": "OCR_FAILED", "message": str(e)[:500]}},
         )
     finally:
+        _mark_idle()
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
