@@ -53,8 +53,9 @@ const CONCURRENT_LARGE = Math.min(parseInt(process.env.CONCURRENT_LARGE || '2'),
 const LARGE_BYTES      = parseInt(process.env.LARGE_FILE_MB || '10') * 1024 * 1024;
 const CKPT_INTERVAL    = parseInt(process.env.CHECKPOINT_INTERVAL || '100');
 const REQUEST_TIMEOUT_MS        = parseInt(process.env.REQUEST_TIMEOUT_MS        || '30000');
-// markitdown PDF 폴백용 별도 짧은 timeout (markitdown이 스캔 PDF에서 hang됨)
-const MARKITDOWN_PDF_TIMEOUT_MS = parseInt(process.env.MARKITDOWN_PDF_TIMEOUT_MS || '15000');
+// kordoc PDF 전용 긴 timeout: 대형 텍스트PDF(감사보고서 등 100p+)는 추출에 수십초 걸림.
+// 30s 기본으론 타임아웃→OCR 오이관되므로 넉넉히. kordoc은 스캔에서 hang 없이 빠르게 빈결과 반환하므로 안전.
+const KORDOC_PDF_TIMEOUT_MS     = parseInt(process.env.KORDOC_PDF_TIMEOUT_MS     || '300000');
 // 변환 결과가 이 글자 수 이하면 "빈 결과"로 간주 (헤더만 있는 경우 등)
 const MIN_CONTENT_CHARS = 20;
 // PDF 품질 게이트: 페이지당 글자 수가 이 값 미만이면 스캔 문서로 보고 ocr_needed 분류
@@ -69,7 +70,7 @@ async function pdfPageCount(absPath) {
 
 // ── Parser 라우팅 ───────────────────────────────────────────────────────────────
 // kordoc 지원: hwp3/hwp/hwpx/hwpml, pdf, xls/xlsx, docx (npm 내장 or HTTP)
-// markitdown은 xlsx/xls/pptx 전용 — pdf·hwp 계열은 kordoc 실패 시 PaddleOCR(ocr_needed)로 직행
+// markitdown은 xlsx/xls/pptx 전용 — **pdf는 markitdown 미사용**(스캔에서 hang). pdf·hwp는 kordoc 실패 시 PaddleOCR(ocr_needed)로 직행
 const ROUTING = {
   hwp:   ['kordoc'],
   hwpx:  ['kordoc'],
@@ -323,22 +324,16 @@ async function convertFile(entry, ckpt) {
   let needsOcr   = false;
 
   for (const parser of parsers) {
-    // markitdown이 PDF 스캔 문서에서 hang되므로 짧은 timeout 적용
-    const timeoutMs = (parser === 'markitdown' && ext === 'pdf')
-      ? MARKITDOWN_PDF_TIMEOUT_MS
+    // PDF는 kordoc 단독(ROUTING). 대형 텍스트 추출 위해 긴 timeout(오이관 방지). markitdown은 pdf 미사용.
+    const timeoutMs = (parser === 'kordoc' && ext === 'pdf') ? KORDOC_PDF_TIMEOUT_MS
       : REQUEST_TIMEOUT_MS;
 
     let data;
     try {
       data = await callParser(parser, absPath, file_name, timeoutMs);
     } catch (err) {
+      // kordoc PDF 타임아웃 등 → 다음 파서 없으면 아래에서 ocr_needed(all_parsers_failed)로 분류
       lastError = err.message;
-      // PDF에서 markitdown 타임아웃 → 스캔 문서 가능성 높음
-      if (ext === 'pdf' && parser === 'markitdown') {
-        needsOcr = true;
-        lastError = 'markitdown_timeout';
-        break;
-      }
       continue;
     }
 

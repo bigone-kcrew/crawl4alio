@@ -69,6 +69,21 @@ node collection/convert_ocr_needed.js
 node collection/convert_ocr_needed.js --refresh
 ```
 
+> **PDF는 kordoc 단독**(markitdown은 스캔에서 hang되어 pdf 미사용). 대형 텍스트PDF(감사보고서 등 100p+)는 추출에 수십초 걸리므로 `KORDOC_PDF_TIMEOUT_MS`(기본 300s)로 넉넉히 잡습니다 — 짧으면 타임아웃→OCR로 오이관됩니다.
+
+## 3-1. OCR 큐 텍스트PDF 회수 — `recover_ocr_text_pdfs.js`
+
+`ocr_needed`에 들어갔지만 실제로는 **텍스트 내장 PDF**(스캔 아님)를 kordoc으로 재추출해 OCR 없이 복구합니다. kordoc은 OCR보다 품질↑·속도↑(대형 감사보고서: OCR 수십분 → kordoc 수십초). 초기 변환의 짧은 타임아웃 등으로 오이관된 문서를, **정기 증분 수집 후 OCR 돌리기 전에** 한 번 돌리면 OCR 부하를 크게 줄입니다.
+
+- 대상: `reason`이 `timeout`/`aborted`/`low_quality`이고 텍스트연산(BT/Tj) 있고 이미지 적은 PDF. `empty_content`(폰트/ToUnicode 부재)는 kordoc·OCR 모두 빈결과라 제외.
+- 성공 시 `alio-md`에 `.md` 기록 + 체크포인트 `kordoc_recovery`로 success → OCR이 DEDUP 스킵.
+
+```bash
+node collection/recover_ocr_text_pdfs.js --dry-run       # 대상 확인
+node collection/recover_ocr_text_pdfs.js                 # 회수 실행
+# env: KORDOC_PARSE_URL, RECOVER_TIMEOUT_MS(300000), RECOVER_REASON_RE
+```
+
 ## 4. 범용 참고문서 변환 — `convert_reference_docs.js`
 
 법령·기관내규처럼 "raw 폴더 → md 폴더"로 통째로 미러 변환할 때 쓰는 재사용 스크립트입니다. 체크포인트 없이 폴더를 순회하며 이미 변환된 파일은 건너뜁니다.

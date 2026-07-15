@@ -19,6 +19,7 @@
     "check:recency": "node collection/check_disclosure_recency.js",
     "convert:markdown": "node collection/convert_to_markdown.js",
     "convert:ocr": "node collection/convert_ocr_needed.js",
+  "recover:text-pdfs": "node collection/recover_ocr_text_pdfs.js",
     "convert:reference": "node collection/convert_reference_docs.js",
     "convert:statistics": "node collection/process_statistics.js && node collection/convert_statistics_to_md.js && node collection/build_statistics_index.js",
     "enrich:legal-ministry": "node collection/enrich_legal_ministry.js",
