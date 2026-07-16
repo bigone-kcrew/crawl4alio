@@ -61,12 +61,25 @@ async function callKordocLocal(buf, filename) {
     }
 }
 
+// kordoc 4.0.8+는 문서 내 이미지를 images[] 바이너리로 추출하고 markdown에
+// ![image](image_001.png) 같은 '상대 파일 참조'를 넣는다. 이 파이프라인은 텍스트
+// 코퍼스만 유지(이미지 미저장)하므로, 저장 안 된 로컬 파일 참조는 깨진 링크가 됨 →
+// 스킴 없는(=미저장 로컬) 이미지 참조만 제거. http(s)·data: URI는 보존.
+function stripDanglingImageRefs(md) {
+    return md.replace(/!\[[^\]]*\]\((?![a-z][a-z0-9+.-]*:)[^)]*\.(?:png|jpe?g|gif|bmp|webp)\)\s?/gi, '');
+}
+
 /**
  * kordoc 변환. KORDOC_PARSE_URL 설정 시 HTTP, 아니면 내장 npm 라이브러리.
  */
 async function callKordoc(buf, filename, timeoutMs) {
-    if (KORDOC_HTTP_URL) return callHttpParser(KORDOC_HTTP_URL, buf, filename, timeoutMs);
-    return callKordocLocal(buf, filename);
+    const res = KORDOC_HTTP_URL
+        ? await callHttpParser(KORDOC_HTTP_URL, buf, filename, timeoutMs)
+        : await callKordocLocal(buf, filename);
+    if (res && res.ok !== false && res.result && typeof res.result.markdown === 'string') {
+        res.result.markdown = stripDanglingImageRefs(res.result.markdown);
+    }
+    return res;
 }
 
 /**

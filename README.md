@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
-![Version](https://img.shields.io/badge/version-1.7.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.7.2-blue.svg)
 ![Status](https://img.shields.io/badge/status-production-success.svg)
 
 [기능](#-기능) · [아키텍처](#-아키텍처) · [설치](#-설치) · [빠른 시작](#-빠른-시작) · [사용법](#-사용법) · [설정](#-설정) · [운영 교훈](#-대규모-운영에서-배운-것)

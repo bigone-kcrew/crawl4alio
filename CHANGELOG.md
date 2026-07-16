@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.7.2] - 2026-07-16
+
+### Added
+- **`scripts/merge_ocr_instance_ckpts.js`** — 멀티 PC 라운드 마감용 최종 병합. `--skip-main-merge`로 돈 인스턴스 성공을 메인 체크포인트에 반영(convert는 큐가 비면 병합 전에 종료하므로 빈 런으론 병합 불가 — 그 자리를 채움). 백업·원자 저장·검증(잔여=영구실패면 exit 0) 포함.
+
+### Changed
+- 내장 kordoc 4.0.7 → **4.0.8** (PDF·HWPX·HWP5·DOCX 이미지 무음 유실 수정판).
+- **kordoc 어댑터에 미저장 이미지 참조 정리 추가**: 4.0.8이 markdown에 넣는 `![image](image_001.png)` 상대 참조는 이 파이프라인(텍스트 코퍼스, 이미지 미저장)에선 깨진 링크가 됨 → 스킴 없는 로컬 이미지 참조만 제거(http/https·data: URI는 보존). 실파일 검증: 참조 0개·외부 URL 보존.
+
 ## [1.7.1] - 2026-07-16
 
 ### Changed
@@ -94,6 +103,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.7.2]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.5.0...v1.6.0
