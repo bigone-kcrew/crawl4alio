@@ -2,6 +2,12 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.7.1] - 2026-07-16
+
+### Changed
+- 내장 kordoc을 3.17.0 → **4.0.7**로 업데이트 — `parse()` API 호환 확인(실파일 PDF·XLSX 테스트 통과, 추출 결과 동일). HTTP 서버(4.x)와 내장의 버전 불일치 해소.
+- README 프로젝트 구조에 누락 항목 반영: `scripts/`(무인 운영 3종)·`recover_ocr_text_pdfs.js`·CHANGELOG/NOTICE.
+
 ## [1.7.0] - 2026-07-16
 
 ### Added
@@ -88,6 +94,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.7.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.4.0...v1.5.0

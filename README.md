@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
-![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.7.1-blue.svg)
 ![Status](https://img.shields.io/badge/status-production-success.svg)
 
 [기능](#-기능) · [아키텍처](#-아키텍처) · [설치](#-설치) · [빠른 시작](#-빠른-시작) · [사용법](#-사용법) · [설정](#-설정) · [운영 교훈](#-대규모-운영에서-배운-것)
@@ -212,17 +212,22 @@ crawl4alio/
 │   ├── collect_legal_corpus.js          # 법령·지침 corpus
 │   ├── collect_institution_bylaws.js    # 기관 내부규정
 │   ├── convert_to_markdown.js           # kordoc→markitdown 변환
-│   ├── convert_ocr_needed.js            # PaddleOCR(스캔) + 스케일아웃 노브
+│   ├── convert_ocr_needed.js            # PaddleOCR(스캔) + 스케일아웃·샤딩 노브
+│   ├── recover_ocr_text_pdfs.js         # OCR 큐 텍스트PDF 회수(kordoc)·--reprocess
 │   ├── sync_alio.js / sync_legal.js     # 증분 동기화
 │   ├── seed_download_ckpt.js            # 오프사이트 증분용 체크포인트 백필
 │   └── project/crawler/                 # 크롤러 설정(yaml)·공용 유틸(parsers·paths 등)
+├── scripts/                        # 무인 운영 감독 (§CONVERSION 3-2)
+│   ├── ocr_watchdog.sh                  # 인스턴스 사망·정체 재기동
+│   ├── ocr_rebalance.sh                 # 밴드 동적 재배분(SPLIT 상향)
+│   └── recover_then_reprocess.sh        # 회수→재처리 체인(cron용)
 ├── ocrtomarkdown/                  # PaddleOCR 응답 → .md 독립 CLI
 ├── deploy/                         # Crawl4AI·PaddleOCR docker compose
 ├── data/
 │   ├── institutions.json           # 355개 기관 시드(공개 정보)
 │   └── disclosure_items.json       # 공시항목 코드 체계(공개 정보)
 ├── docs/                           # INSTALL·COLLECTION·CONVERSION·PARSERS
-├── .env.example · package.json · LICENSE
+├── .env.example · package.json · CHANGELOG.md · NOTICE.md · LICENSE
 ```
 
 `data/` 하위 수집 결과물(`structured_data/`·`legal-md/`·`logs/` 등)은 `.gitignore` 처리 — 직접 실행해 채웁니다.
