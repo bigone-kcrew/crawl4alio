@@ -47,25 +47,17 @@
 ## 🏗 아키텍처
 
 ```mermaid
-flowchart LR
-    subgraph 수집
-      A["ALIO 상세페이지"] --> B["Crawl4AI"]
-      A2["게시판/법령 JSON API"] --> C
-      B --> C["원문·첨부파일 (raw)"]
-    end
-    subgraph 변환
-      C --> D["kordoc"]
-      D -->|실패| E["markitdown"]
-      D -->|스캔 PDF| Q["ocr_needed 큐"]
-      E --> Q
-      Q -->|"텍스트 PDF 회수 (kordoc 재시도)"| G
-      Q -->|진짜 스캔| F["PaddleOCR"]
-      D --> G["기관별 Markdown (md)"]
-      E --> G
-      F --> G
-    end
-    G --> H["검색·RAG·증분 동기화"]
+flowchart TB
+    A["수집 — ALIO · 법령 · 내규"] --> R["원본 첨부 (raw)"]
+    R --> K["kordoc 변환"]
+    K -->|"텍스트 추출 성공"| M["기관별 Markdown (md)"]
+    K -->|"스캔 · 추출 실패"| Q["ocr_needed 큐"]
+    Q -->|"텍스트 PDF → kordoc 회수"| M
+    Q -->|"진짜 스캔 → PaddleOCR"| M
+    M --> S["검색 · RAG · 증분 동기화"]
 ```
+
+> 파서 폴백(markitdown)·수집 경로별 상세는 아래 표 참고.
 
 **수집 계층** — 목록(카탈로그) → 크롤러:
 
