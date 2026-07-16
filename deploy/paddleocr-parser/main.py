@@ -67,6 +67,28 @@ def _self_watchdog():
 
 if _SELF_KILL_RSS_MB > 0 or _SELF_KILL_HANG_S > 0:
     _threading.Thread(target=_self_watchdog, daemon=True).start()
+
+# 디스크 I/O 오류·연속실패 가드(opt-in). EIO(tmp 저장소 I/O 오류)는 프로세스 내 회복 불가로
+# 이후 서버가 연결불가 wedge에 빠져 RSS/hang 가드가 못 잡음 → 발생 즉시 재시작이 최선.
+import errno as _errno
+_SELF_KILL_FAILS = int(os.environ.get("OCR_SELF_KILL_FAILS", "0"))  # /parse 연속 실패 이 횟수 도달 시 자가종료(0=비활성)
+_consec_fails = {"n": 0}
+
+
+def _note_ok():
+    _consec_fails["n"] = 0
+
+
+def _note_fail(exc):
+    if _SELF_KILL_FAILS <= 0:
+        return
+    if isinstance(exc, OSError) and exc.errno == _errno.EIO:
+        print(f"[self-watchdog] self-exit (EIO: {exc}) -> container restart", flush=True)
+        os._exit(137)
+    _consec_fails["n"] += 1
+    if _consec_fails["n"] >= _SELF_KILL_FAILS:
+        print(f"[self-watchdog] self-exit (consecutive fails {_consec_fails['n']}>={_SELF_KILL_FAILS}) -> container restart", flush=True)
+        os._exit(137)
 # ── 자가복구 끝 ──
 
 _pipeline = None
@@ -140,9 +162,11 @@ async def parse(file: UploadFile = File(...)):
                 status_code=200,
                 content={"ok": False, "error": {"code": "EMPTY_RESULT", "message": "OCR 결과 없음"}},
             )
+        _note_ok()
         return {"ok": True, "result": {"markdown": markdown, "pages": len(pages)}}
 
     except Exception as e:  # noqa: BLE001
+        _note_fail(e)
         return JSONResponse(
             status_code=200,  # 클라이언트는 본문 JSON의 ok로 판정 (기존 파서 관례)
             content={"ok": False, "error": {"code": "OCR_FAILED", "message": str(e)[:500]}},

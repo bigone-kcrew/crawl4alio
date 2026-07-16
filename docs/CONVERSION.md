@@ -73,15 +73,25 @@ node collection/convert_ocr_needed.js --refresh
 
 ## 3-1. OCR 큐 텍스트PDF 회수 — `recover_ocr_text_pdfs.js`
 
-`ocr_needed`에 들어갔지만 실제로는 **텍스트 내장 PDF**(스캔 아님)를 kordoc으로 재추출해 OCR 없이 복구합니다. kordoc은 OCR보다 품질↑·속도↑(대형 감사보고서: OCR 수십분 → kordoc 수십초). 초기 변환의 짧은 타임아웃 등으로 오이관된 문서를, **정기 증분 수집 후 OCR 돌리기 전에** 한 번 돌리면 OCR 부하를 크게 줄입니다.
+`ocr_needed`에 들어갔지만 실제로는 **텍스트 내장 PDF**(하이브리드 포함, 순수 스캔 아님)를 kordoc으로 재추출해 OCR 없이 복구합니다. kordoc은 OCR보다 품질↑·속도↑(대형 감사보고서: OCR 수십분 → kordoc 수십초). 초기 변환의 짧은 타임아웃 등으로 오이관된 문서를, **정기 증분 수집 후 OCR 돌리기 전에** 한 번 돌리면 OCR 부하를 크게 줄입니다.
 
-- 대상: `reason`이 `timeout`/`aborted`/`low_quality`이고 텍스트연산(BT/Tj) 있고 이미지 적은 PDF. `empty_content`(폰트/ToUnicode 부재)는 kordoc·OCR 모두 빈결과라 제외.
-- 성공 시 `alio-md`에 `.md` 기록 + 체크포인트 `kordoc_recovery`로 success → OCR이 DEDUP 스킵.
+- 대상: `reason`이 `timeout`/`aborted`/`low_quality`이고 텍스트연산(BT/Tj)이 있는 PDF, 미완료.
+  - **하이브리드(텍스트+이미지)도 포함**한다. 실측(회수 542건 분석)상 **원인의 91%가 kordoc 타임아웃**이고, **회수분의 58%가 이미지 다수(img>2) 하이브리드**였다 — "이미지 적은 것만" 좁게 거르면 절반 이상을 놓친다.
+  - `empty_content`(폰트/ToUnicode 부재)는 kordoc·OCR 모두 빈결과라 제외.
+- **품질 게이트**: 하이브리드를 넓게 받으므로, kordoc이 부분추출한 진짜 스캔은 페이지당 글자수(다중 100자/p·1p 70자) 미만이면 OCR에 남긴다(품질 퇴행 방지). 실측 잔여의 low_quality는 대개 27~55자/p 스캔이라 게이트가 정확히 OCR로 유지.
+  - 페이지 수는 `/Type /Page` 카운트가 기본이지만, **압축 오브젝트스트림(/ObjStm) PDF는 이 마커가 압축돼 1페이지로 오인**됩니다(45p 스캔본 1,278자가 게이트를 통과해버린 실사례). regex가 1p 이하 + /ObjStm 존재면 pdf-lib로 정확히 재계산하고, 끝내 불명이면 회수를 포기(OCR 유지, 안전측)합니다.
+- 성공 시 `alio-md`에 `.md` 기록 + 체크포인트 `kordoc_recovery`로 success → OCR이 DEDUP 스킵(중복 처리 없음).
+  - 체크포인트는 건마다 통째 저장하지 않고 `RECOVER_FLUSH_EVERY`(기본 20)건마다·종료 시 배치 저장합니다 — 67MB급 JSON을 수백 번 rewrite하는 I/O 부하(NAS 다운의 유력 원인이었음)를 없앤 것.
+- **kordoc 우선 강제(`kordoc_pending.json`)**: 회수와 OCR을 병행하면 OCR이 kordoc 적격 문서를 먼저 잡아버리는 race가 생깁니다(실측 711건). 회수가 판정 전 대상 id를 `kordoc_pending.json`에 기록하면 `convert_ocr_needed.js`가 그 id를 큐에서 제외 — kordoc이 판정(성공/LOW/실패)한 것만 OCR로 방출됩니다. 파일의 `updated`가 12h(`KORDOC_PENDING_TTL_H`)보다 오래되면 비정상종료 잔재로 보고 무시합니다.
+- **`--reprocess`**: race 등으로 이미 OCR 처리된 텍스트PDF를 kordoc으로 재추출해, 품질 게이트 통과 시 `.md`를 교체(업그레이드)합니다. 회수 패스가 끝난 뒤 단독으로 돌리세요.
+- **타임아웃 예방과 병행**: 회수는 백스톱이고, 근본 예방은 초기 변환의 `KORDOC_PDF_TIMEOUT_MS`(기본 300s)다. 둘을 함께 두면 다음 증분엔 대형 텍스트/하이브리드 PDF가 애초에 OCR로 새지 않는다.
 
 ```bash
 node collection/recover_ocr_text_pdfs.js --dry-run       # 대상 확인
 node collection/recover_ocr_text_pdfs.js                 # 회수 실행
-# env: KORDOC_PARSE_URL, RECOVER_TIMEOUT_MS(300000), RECOVER_REASON_RE
+node collection/recover_ocr_text_pdfs.js --reprocess     # 이미 OCR된 텍스트PDF를 kordoc으로 교체
+# env: KORDOC_PARSE_URL, RECOVER_TIMEOUT_MS(300000), RECOVER_REASON_RE,
+#      RECOVER_MIN_CHARS_PER_PAGE(100), RECOVER_MIN_CHARS_1P(70), RECOVER_FLUSH_EVERY(20)
 ```
 
 ## 4. 범용 참고문서 변환 — `convert_reference_docs.js`

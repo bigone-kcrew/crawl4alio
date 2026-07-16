@@ -388,6 +388,28 @@ async function main() {
   if (Object.keys(contentHashToMd).length > 0)
     console.log(`이전 배치 해시 로드: ${Object.keys(contentHashToMd).length}건`);
 
+  // kordoc 우선 강제: recovery(recover_ocr_text_pdfs)가 판정 대기 중인 id는 OCR 큐에서 제외.
+  // kordoc이 성공하면 그대로 완료, LOW/실패면 pending에서 빠져 다음 배치에 OCR로 편입된다.
+  // (kordoc_pending.json 없거나 파싱 실패 시 제외 0 = 기존 동작)
+  // ⚠️ stale 가드: recovery가 비정상 종료(kill -9 등)하면 pending이 남아 해당 문서가 영구
+  //    제외될 수 있다 → updated가 TTL(기본 12h)보다 오래된 파일은 무시(경고만).
+  const kordocPending = (() => {
+    try {
+      const p = fromLogsRoot('kordoc_pending.json');
+      if (!fs.existsSync(p)) return new Set();
+      const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+      const ttlH = parseFloat(process.env.KORDOC_PENDING_TTL_H || '12');
+      const age = Date.now() - new Date(j.updated || 0).getTime();
+      if (!(age < ttlH * 3600 * 1000)) {
+        if ((j.ids || []).length) console.log(`⚠️ kordoc_pending 무시: updated ${j.updated} (TTL ${ttlH}h 초과 — recovery 비정상종료 잔재로 판단)`);
+        return new Set();
+      }
+      return new Set(j.ids || []);
+    } catch { return new Set(); }
+  })();
+  if (kordocPending.size > 0)
+    console.log(`kordoc 판정대기 제외: ${kordocPending.size}건 (recovery 우선 처리 중)`);
+
   // 배치 분류: DEDUP(즉시) → OCR canonical(score 순) → CDEDUP pending(canonical 완료 후 즉시)
   // 해시를 미리 계산해 배치 내 중복 및 cross-batch 중복을 사전에 식별한다.
   console.log('배치 분류 중 (DEDUP / OCR canonical / CDEDUP pending)...');
@@ -396,7 +418,7 @@ async function main() {
   const cdedupPending  = [];  // 배치 내 중복 또는 이전 배치 canonical → 즉시 복사
   const batchHashSeen  = {};  // 배치 내 중복 탐지용
 
-  for (const item of (ocrNeeded.files || []).filter(i => !ocrCkpt.files[i.id])) {
+  for (const item of (ocrNeeded.files || []).filter(i => !ocrCkpt.files[i.id] && !kordocPending.has(i.id))) {
     let size = 0, pages = 0;
     try { size = fs.statSync(item.file_path).size; } catch {}
     pages = getPdfPageCount(item.file_path);

@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
-![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
 ![Status](https://img.shields.io/badge/status-production-success.svg)
 
 [기능](#-기능) · [아키텍처](#-아키텍처) · [설치](#-설치) · [빠른 시작](#-빠른-시작) · [사용법](#-사용법) · [설정](#-설정) · [운영 교훈](#-대규모-운영에서-배운-것)
@@ -41,6 +41,7 @@
 - **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+별표·서식 구조화 수집, 검색 기반 추가, ALIO 법령/지침 게시판(기재부 지침 개정 이력) 수집.
 - **기관 내부규정 수집** — ALIO 게시판에서 최신본 또는 개정 이력 전체(`--all-files`).
 - **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX를 **kordoc → markitdown → PaddleOCR** 폴백으로 변환. ZIP 자동 해제, 스캔 PDF 품질 게이트, raw/md 트리 분리 출력.
+- **OCR 큐 회수 (kordoc 우선 원칙)** — OCR 큐에 잘못 들어간 텍스트 PDF를 kordoc으로 되찾아옵니다. OCR보다 15~45배 빠르고 깨끗한데다, 회수가 도는 동안 OCR이 같은 문서를 먼저 잡아가는 경쟁까지 `kordoc_pending` 목록으로 차단합니다. 이미 OCR로 처리해버린 문서도 `--reprocess`로 kordoc 결과로 교체 가능.
 - **OCR 스케일아웃** — 밴드(크기·밀도)·페이지 균형점·인스턴스별 체크포인트 env로 **약한 CPU 여러 대에 스캔 문서 OCR을 분산**. 메모리 안전(고해상도→고RAM PC)과 속도 균형(느린 PC 과부하 방지)을 함께 잡고, 클라이언트 fail-fast + 서버 자가종료로 **OOM/hang 무인 자기치유**.
 
 ## 🏗 아키텍처
@@ -55,8 +56,10 @@ flowchart LR
     subgraph 변환
       C --> D["kordoc"]
       D -->|실패| E["markitdown"]
-      D -->|스캔 PDF| F["PaddleOCR"]
-      E --> F
+      D -->|스캔 PDF| Q["ocr_needed 큐"]
+      E --> Q
+      Q -->|"텍스트 PDF 회수 (kordoc 재시도)"| G
+      Q -->|진짜 스캔| F["PaddleOCR"]
       D --> G["기관별 Markdown (md)"]
       E --> G
       F --> G
@@ -79,7 +82,11 @@ flowchart LR
 
 모든 계층이 `CATALOG_ROOT` 하나로 데이터 루트(목록·수집물·체크포인트·로그)를 공유합니다.
 
-**변환 체인** — `kordoc`(HWP3/5·HWPX·PDF·XLS(X)·DOCX, npm 내장이라 서버 불필요) → `markitdown`(XLS(X)/PPTX 폴백, 선택) → `PaddleOCR`(스캔 PDF/이미지). 스캔 PDF는 kordoc이 빈 텍스트로 "성공" 반환하므로, **페이지당 글자 수 게이트**로 걸러 OCR 큐로 넘깁니다. 최종 산출물은 기관별 Markdown이며, 원본 첨부(raw)와 변환·메타(md) 트리를 분리해 raw를 오프사이트 보관할 수 있습니다.
+**변환 체인** — `kordoc`(HWP3/5·HWPX·PDF·XLS(X)·DOCX, npm 내장이라 서버 불필요) → `markitdown`(XLS(X)/PPTX 폴백, 선택) → `PaddleOCR`(스캔 PDF/이미지). 스캔 PDF는 kordoc이 빈 텍스트로 "성공" 반환하므로, **페이지당 글자 수 게이트**로 걸러 OCR 큐로 넘깁니다.
+
+원칙은 하나입니다 — **kordoc이 읽을 수 있는 문서는 끝까지 kordoc이 처리한다.** OCR은 진짜 스캔본만 맡습니다. 그래서 OCR 큐로 새어 들어간 텍스트 PDF는 `recover_ocr_text_pdfs.js`가 kordoc으로 되찾아오고(품질 게이트 통과분만), 회수가 판정 중인 문서는 `kordoc_pending` 목록으로 OCR이 건드리지 못하게 막습니다. 순서로 쓰면: **변환 → 회수 → OCR**.
+
+최종 산출물은 기관별 Markdown이며, 원본 첨부(raw)와 변환·메타(md) 트리를 분리해 raw를 오프사이트 보관할 수 있습니다.
 
 - **kordoc** — [github.com/chrisryugj/kordoc](https://github.com/chrisryugj/kordoc), npm 의존성으로 내장.
 - **Crawl4AI**(ALIO 본문 표)·**PaddleOCR**(스캔 PDF) — 외부 서비스. 풀스택 프로필의 docker compose에 포함.
@@ -114,9 +121,10 @@ node collection/download_documents_advanced.js --print-scope        # 범위 미
 node collection/download_documents_advanced.js --categories 노동조합  # 예: 특정 항목
 node collection/collect_board_disclosures.js --forms B1210,B1220 --years 3
 
-# 2) 변환
+# 2) 변환 — 순서 중요: 변환 → 회수 → OCR
 npm run build:file-index
 npm run convert:markdown
+node collection/recover_ocr_text_pdfs.js   # OCR 큐로 샌 텍스트PDF를 kordoc으로 회수
 npm run convert:ocr
 
 # 3) 증분 운영
@@ -235,6 +243,9 @@ crawl4alio/
 - **재수집 경로는 체크포인트를 우회해야 한다** — 개정 감지가 ckpt에 막히면 개정본을 영원히 못 받는다.
 - **스크립트 사본 이중화가 사고의 근원** — 코드/데이터는 `CATALOG_ROOT`로 분리하고 사본을 만들지 않는다.
 - **PDF 텍스트 추출 "성공"을 믿지 말 것** — 스캔 PDF도 빈 텍스트로 성공 반환. 페이지당 글자 수 게이트로 OCR로 돌린다(단일 페이지는 임계 완화).
+- **PDF 페이지 수 세기도 함정이 있다** — 압축 오브젝트스트림(`/ObjStm`) PDF는 페이지 마커가 압축돼 있어 바이트 스캔으로는 1페이지로 오인된다. 그 상태로 품질 게이트를 태우면 45페이지 스캔본이 "1페이지 1,278자, 통과!"가 된다(실제 사고). 의심되면 진짜 파서(pdf-lib)로 재계산하고, 그래도 모르면 보수적으로 처리(v1.5.0).
+- **파서 둘을 같은 큐에 풀어놓으면 빠른 놈이 이긴다 — 정확한 놈이 아니라.** 회수(kordoc)와 OCR을 병행시켰더니 OCR이 kordoc 몫의 텍스트 PDF 711건을 먼저 먹어버렸다. 우선순위는 소망이 아니라 코드로 강제해야 한다: 판정 대기 목록(`kordoc_pending.json`)으로 OCR이 기다리게 하고, 비정상 종료 잔재는 TTL로 무시(v1.5.0).
+- **거대 체크포인트를 건마다 통째로 다시 쓰지 말 것** — 67MB JSON을 문서 하나 처리할 때마다 rewrite하는 스크립트가 여럿 겹치자 NAS가 통째로 내려갔다. N건마다 배치 저장 + 종료 시그널에서 flush(v1.5.0).
 - **초대형 스캔 문서가 OCR 시간을 지배한다** — 페이지 수 편중이 심하므로(소수 대형이 대부분의 페이지), 소형↑/대형↓로 나눠 여러 CPU에 분산(OCR 스케일아웃 노브).
 - **게시판형은 항목마다 API가 다르다** — 페이지 JS의 axios 호출을 리버싱하면 대개 단순 JSON API다.
 
