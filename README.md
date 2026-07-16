@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
-![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)
 ![Status](https://img.shields.io/badge/status-production-success.svg)
 
 [기능](#-기능) · [아키텍처](#-아키텍처) · [설치](#-설치) · [빠른 시작](#-빠른-시작) · [사용법](#-사용법) · [설정](#-설정) · [운영 교훈](#-대규모-운영에서-배운-것)
@@ -43,6 +43,7 @@
 - **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX를 **kordoc → markitdown → PaddleOCR** 폴백으로 변환. ZIP 자동 해제, 스캔 PDF 품질 게이트, raw/md 트리 분리 출력.
 - **OCR 큐 회수 (kordoc 우선 원칙)** — OCR 큐에 잘못 들어간 텍스트 PDF를 kordoc으로 되찾아옵니다. OCR보다 15~45배 빠르고 깨끗한데다, 회수가 도는 동안 OCR이 같은 문서를 먼저 잡아가는 경쟁까지 `kordoc_pending` 목록으로 차단합니다. 이미 OCR로 처리해버린 문서도 `--reprocess`로 kordoc 결과로 교체 가능.
 - **OCR 스케일아웃** — 밴드(크기·밀도)·페이지 균형점·인스턴스별 체크포인트 env로 **약한 CPU 여러 대에 스캔 문서 OCR을 분산**. 메모리 안전(고해상도→고RAM PC)과 속도 균형(느린 PC 과부하 방지)을 함께 잡고, 클라이언트 fail-fast + 서버 자가종료로 **OOM/hang 무인 자기치유**.
+- **무인 운영 스크립트** — 워치독(사망·정체 재기동), 밴드 동적 재배분(빈 PC에 일감 이관), 회수→재처리 체인이 `scripts/`에 동봉. 감독 프로세스까지 포함해 **cron만 걸면 사람 없이 돕니다** ([docs/CONVERSION.md §3-2](docs/CONVERSION.md)).
 
 ## 🏗 아키텍처
 

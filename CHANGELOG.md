@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.6.0] - 2026-07-16
+
+### Added
+- **무인 운영 스크립트 3종 (`scripts/`)** — 사이트 특화 없이 env만으로 구동:
+  - `ocr_watchdog.sh`: OCR 인스턴스 감독 — 사망 재기동, 정체 감지(실행 로그 mtime 기준 — inflight 기준은 대형 다청크 문서를 오인 종료), 큐 소진 백오프, 재배분 config 자동 반영.
+  - `ocr_rebalance.sh`: safe(저RAM) 인스턴스 소진 임박 시 `OCR_SPLIT_PAGES` 상향으로 저밀도 대형을 이관. 안정성 불변식 내장(밀도 임계 불변·SPLIT 상향만·양 서버 health 정상 시에만·recovery 진행 중 보류).
+  - `recover_then_reprocess.sh`: 회수→재처리 체인 — cron의 변환 후·OCR 전 단계용.
+- 위 스크립트들은 실운영(듀얼 PC, 32만+ 파일)에서 크래시·오인 종료·오발동을 겪고 고친 로직의 이식이다.
+
 ## [1.5.0] - 2026-07-16
 
 **"kordoc이 읽을 수 있는 문서는 끝까지 kordoc이 처리한다"** — 변환→회수→OCR 순서를 코드로 강제하고, 실사고(NAS 다운·오회수·파서 race)에서 나온 결함을 수정한 안정화 릴리스.
@@ -74,6 +83,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.6.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.3.0...v1.3.1
