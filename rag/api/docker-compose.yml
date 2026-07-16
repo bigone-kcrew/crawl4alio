@@ -1,0 +1,22 @@
+# rag-api 전용 독립 compose — 기존 n8n/postgres compose 파일을 건드리지 않는다.
+# 전제: ai-internal 네트워크가 이미 존재(기존 postgres/n8n compose가 생성).
+#       실제 이름이 다르면(예: projectname_ai-internal) 아래 name 값을 맞게 바꿀 것 —
+#       확인: docker network ls | grep -i ai
+#
+# 실행 (alio 프로젝트 루트에서):
+#   docker compose -f rag/api/docker-compose.yml up -d
+services:
+  rag-api:
+    image: alio-rag-api:latest
+    restart: unless-stopped
+    networks:
+      - ai-internal
+    env_file:
+      - ../../.env.api
+    ports:
+      - "8090:8090"
+
+networks:
+  ai-internal:
+    external: true
+    name: ai-internal   # 다르면 실제 네트워크명으로 교체

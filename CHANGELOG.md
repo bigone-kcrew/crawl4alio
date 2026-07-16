@@ -2,6 +2,12 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.0] - 2026-07-17
+
+### Added
+- **`postprocess/` — OCR Markdown 후처리 5종**: 조문 경계 정리(clean)·조 제목 감사/승격(audit/fix_article_heading_gaps)·순번 표식 감사/복원(audit/fix_nested_marker_gaps). manifest 고정·candidate/applied/residual 로그·멱등성·기본 dry-run 원칙. 실감사 교훈 반영 — **조 제목 승격은 '제목만 있는 줄'만**(본문 붙은 줄은 분리 후보로 기록만; 과거 과다 승격 945건 전량이 새 게이트에서 차단됨을 실데이터로 검증). 문서: docs/POSTPROCESS.md.
+- **`rag/` — RAG 확장 모듈**: 조항 파서→PostgreSQL 적재(감사컬럼·load_runs)→NVIDIA 임베딩(비대칭 task type)→검색(키워드 trgm·의미 pgvector·**RRF 하이브리드**·2단계 filtered semantic)→HTTP API(Pool·3중 캐시)→MCP 서버. 136만 조문 실운영 스택의 일반화판(`RAG_ROOT`로 데이터 워크스페이스 지정). 공유 분류 모듈 `collection/classify_usecase.js` 동봉.
+
 ## [1.8.1] - 2026-07-17
 
 ### Fixed
@@ -113,6 +119,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.9.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.1...v1.7.2
