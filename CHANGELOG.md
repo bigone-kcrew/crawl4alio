@@ -1,0 +1,83 @@
+# Changelog
+
+이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
+
+## [1.5.0] - 2026-07-16
+
+**"kordoc이 읽을 수 있는 문서는 끝까지 kordoc이 처리한다"** — 변환→회수→OCR 순서를 코드로 강제하고, 실사고(NAS 다운·오회수·파서 race)에서 나온 결함을 수정한 안정화 릴리스.
+
+### Added
+- **kordoc 우선 강제**: 회수가 판정 전 대상을 `kordoc_pending.json`에 기록하면 OCR(`convert_ocr_needed`)이 해당 문서를 건너뜀. 판정 끝난 것(LOW/실패)만 OCR로 방출 — OCR이 kordoc 몫 텍스트 PDF를 선점하던 race(실측 711건) 차단. 비정상 종료 잔재는 `KORDOC_PENDING_TTL_H`(기본 12h)로 무시해 영구 제외 방지.
+- **`--reprocess` 모드**: race 등으로 이미 OCR 처리된 텍스트 PDF를 kordoc으로 재추출, 품질 게이트 통과 시 `.md` 교체(사후 품질 업그레이드).
+- OCR 큐 텍스트 PDF 회수 도구 `recover_ocr_text_pdfs.js` — 하이브리드 포함 넓게 시도하고 페이지당 글자 수 게이트로 판정(실측: 오이관 원인의 91%가 kordoc 타임아웃, 회수분의 58%가 이미지 다수 하이브리드).
+- OCR 스케일아웃 밴드 확장: `safe`/`risky`(밀도+페이지 균형), `OCR_SPLIT_PAGES`(페이지 균형점), `OCR_QUARANTINE_PATH`/`OCR_INFLIGHT_PATH`(OOM 문서 자기치유 격리), `OCR_MAX_TIMEOUT`.
+- PaddleOCR 서버 자가복구(opt-in): RSS 초과·요청 hang·EIO·연속 실패 시 자가종료 → 컨테이너 restart 정책으로 무인 재기동.
+
+### Fixed
+- **품질 게이트 페이지 수 오인**: 압축 오브젝트스트림(`/ObjStm`) PDF가 바이트 스캔에서 1페이지로 오인돼 부실 추출이 게이트를 통과(45p 스캔본이 1,278자로 "회수 성공"된 실사례). regex가 1p 이하 + `/ObjStm` 존재 시 pdf-lib로 정확 재계산, 끝내 불명이면 회수 포기(OCR 유지, 안전측).
+- **체크포인트 I/O 폭주**: 회수가 건마다 67MB급 JSON을 통째로 rewrite — 다른 프로세스와 겹치자 NAS가 다운된 원인. `RECOVER_FLUSH_EVERY`(기본 20)건마다·종료 시 배치 저장으로 변경, SIGINT/SIGTERM에서도 flush.
+- 초기 변환의 kordoc PDF 타임아웃을 300s로 상향(`KORDOC_PDF_TIMEOUT_MS`) — 대형 텍스트 PDF가 타임아웃으로 OCR에 오이관되던 근본 원인 예방.
+
+## [1.4.0] - 2026-07-13
+
+### Added
+- ALIO 법령/지침 게시판 수집기(기재부 지침 개정 이력).
+- 게시판 첨부 전용 변환 인덱서 + `convert --index`.
+- OCR 하이브리드 모드(kordoc 변환과 OCR 소비 병행).
+
+### Fixed
+- **OCR 산출 misroute**: raw/md 트리 분리 후 OCR `.md`가 alio-raw에 기록되던 버그 — `toMdOutput()`으로 정정.
+- 변환 대량 skip 사고 3중 수정(디스크 존재 판정·체크포인트 정합).
+
+### Changed
+- 수집·변환 스크립트 카탈로그화 전수 완료, README를 OSS 관례로 전면 개편(대규모 운영 교훈 문서화 포함).
+
+## [1.3.1] - 2026-07-11
+
+### Changed
+- `CATALOG_ROOT` 단일화 — 코드/데이터 완전 분리, 모든 계층이 데이터 루트 하나를 공유.
+- raw/md 트리 정합 정리 + report 체크포인트 시딩(`seed_download_ckpt.js`) — raw 오프사이트 이관 후에도 증분 수집.
+
+### Fixed
+- 내규 수집기 체크포인트 디렉토리 부재 시 ENOENT 크래시.
+
+## [1.3.0] - 2026-07-11
+
+### Added
+- **report-level 체크포인트** — "디스크에 파일 있음" 대신 체크포인트를 진실로: 원본(raw)을 오프사이트로 옮겨 삭제한 뒤에도 증분 수집 가능.
+
+## [1.2.0] - 2026-07-11
+
+### Added
+- 게시판형 공시 수집기: 국회 지적(B1210)·감사원 지적(B1220) 본문+첨부, 경영평가(B1230/B1250) 첨부.
+- 항목별 첨부전용 모드(`--attach-only-items`) — 본문 없는 항목은 크롤러 생략으로 대폭 가속.
+
+### Fixed
+- 게시판형 목록이 기관당 1건으로 접히던 dedup 버그.
+- 긴 한글 제목 ENAMETOOLONG로 런 전체가 중단되던 버그.
+- 체크포인트 atomic write — 병렬 수집 race 방지.
+
+### Changed
+- 다운로드·채용 수집 대폭 병렬화(report당 네트워크 3콜 병렬, 게시글·파일 병렬, 전역 요청 세마포어, 스트림 다운로드).
+
+## [1.1.0] - 2026-07-09
+
+### Added
+- ALIO 전체 공시항목(92종) 확대 — 스코프 모드·정기/수시 구분·기관 선택.
+- 증분 동기화 `sync_alio.js`(fast/full × report/apply).
+- law.go.kr 별표·서식 수집 + 법령 추가 CLI + 개정 감지.
+- 채용공고 수집기(B1010/B1020) — fileNo 캐시·idate 변경 감지·파일명 충돌 처리.
+- 설치 프로필 2종(kordoc npm 내장 최소 / docker compose 풀스택) + INSTALL 가이드.
+- 파일 해시 캐시로 중복 파싱 방지.
+
+## [1.0.0] - 2026-07-07
+
+- 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
+
+[1.5.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/bigone-kcrew/crawl4alio/releases/tag/v1.0.0

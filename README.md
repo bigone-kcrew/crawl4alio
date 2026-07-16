@@ -257,6 +257,7 @@ crawl4alio/
 - [docs/COLLECTION.md](docs/COLLECTION.md) — 수집 상세 옵션
 - [docs/CONVERSION.md](docs/CONVERSION.md) — 변환 파이프라인
 - [docs/PARSERS.md](docs/PARSERS.md) — 파서 `/parse` 계약(직접 연결용)
+- [CHANGELOG.md](CHANGELOG.md) — 버전별 변경 이력
 
 <a name="기수집-데이터-문의"></a>
 ## 📮 기수집 데이터 문의
