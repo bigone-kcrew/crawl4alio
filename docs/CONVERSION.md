@@ -26,20 +26,31 @@ kordoc/markitdown 모두 실패 또는 "빈 내용"으로 판정
 
 ## 1-1. raw/md 저장 규약
 
-| 코퍼스 | raw(원본) | md(변환본) | 분리 방식 |
-|---|---|---|---|
-| ALIO 공시 | `data/structured_data/` | 기본: 원본 옆 `.md` / `--md-root` 지정 시 미러 트리 | 선택형 |
-| 법령 | `data/legal-raw/` (DRF JSON·별표 파일 포함) | `data/legal-md/` | 수집 시 미러 |
-| 기관 내규 | `data/institution-bylaws-raw/` | `data/institution-bylaws-md/` | 수집·변환 시 미러 |
+ALIO 공시는 **두 가지 레이아웃**을 지원합니다. 기본은 합본이고, 대규모 운영(raw 오프사이트 보관)에서는 분리를 권장합니다.
 
-ALIO 공시를 raw/md 분리 배포하려면:
+| 레이아웃 | raw(원본) | md(변환본) | 언제 |
+|---|---|---|---|
+| **합본 (기본)** | `data/structured_data/` | 원본 옆 `.md` | 소규모·처음 시작 |
+| **분리 (운영 권장)** | `data/alio-raw/` | `data/alio-md/` | raw 오프사이트 이관·md만 배포할 때 |
+
+법령·내규는 처음부터 미러 분리입니다:
+
+| 코퍼스 | raw(원본) | md(변환본) |
+|---|---|---|
+| 법령 | `data/legal-raw/` (DRF JSON·별표 파일 포함) | `data/legal-md/` |
+| 기관 내규 | `data/institution-bylaws-raw/` | `data/institution-bylaws-md/` |
+
+**분리 레이아웃 전환** — `structured_data`를 alio-md 쪽 심링크로 걸어두면, 수집·변환기가 realpath의 `/alio-md/`를 보고 원본 위치를 `/alio-raw/`로 **자동 해석**합니다(또는 `ALIO_RAW_BASE`/`--raw-root`로 명시):
 
 ```bash
+# 예: structured_data -> alio-md/자료/기관별공시 (심링크)
 node collection/convert_to_markdown.js --md-root data/alio-md
 # 또는 MD_MIRROR_ROOT=data/alio-md node collection/convert_to_markdown.js
 ```
 
 미러 모드는 `structured_data`와 동일한 `[부처]기관명_코드/SCD_항목명/연도/` 구조로 `.md`만 출력합니다. 미지정 시 기존 동작(원본 옆 저장)이며, 체크포인트에 출력 경로가 기록되므로 재실행해도 안전합니다.
+
+> 이 문서의 다른 절(회수·misroute 등)에서 말하는 `alio-raw`/`alio-md`는 분리 레이아웃 기준입니다. 합본으로 쓰면 해당 경로를 `structured_data`로 읽으면 됩니다.
 
 ## 2. 메인 변환 — `convert_to_markdown.js`
 
