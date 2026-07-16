@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.7.0] - 2026-07-16
+
+### Added
+- **`OCR_SHARD=i/n` — N대 확장 샤딩**: 문서 id 해시 모듈러로 같은 밴드를 다시 N분할. 기존 밴드(safe/risky 등)와 **조합 가능**해, 3~4대 구성(예: risky 1대 + safe×3샤드)이 밀도 안전축을 유지한 채 가능해짐. 실측(잔여 큐 829건): 겹침·누락 0, 분포 균등(±5%), 결정성 확인.
+
 ## [1.6.0] - 2026-07-16
 
 ### Added
@@ -83,6 +88,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.7.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.3.1...v1.4.0

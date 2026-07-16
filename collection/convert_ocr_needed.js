@@ -488,17 +488,29 @@ async function main() {
     : BAND === 'safe' ? isSafe
     : BAND === 'risky' ? (i => !isSafe(i))
     : (i => { const pg = i.pages > 0 ? i.pages : 1; return pg >= PAGE_MIN && pg <= PAGE_MAX; });
-  const priorityItems  = ocrCanonicals.filter(i => prioritySet.has(i.file_path) && bandFilter(i));
-  const normalItems    = ocrCanonicals.filter(i => !prioritySet.has(i.file_path) && bandFilter(i));
+  // N대 확장: OCR_SHARD="i/n" — 밴드와 '조합 가능한' 정적 샤딩(문서 id 해시 모듈러, 0-based).
+  // 예: 4대 = risky 1대 + safe 3대(OCR_SHARD=0/3,1/3,2/3). 같은 조건이면 항상 같은 샤드 → 겹침·누락 0.
+  const SHARD = (() => {
+    const m = String(process.env.OCR_SHARD || '').match(/^(\d+)\/(\d+)$/);
+    if (!m) return null;
+    const idx = parseInt(m[1], 10), n = parseInt(m[2], 10);
+    if (!(n >= 2 && idx >= 0 && idx < n)) { console.log(`⚠️ OCR_SHARD 무시(형식 i/n, 0<=i<n): ${process.env.OCR_SHARD}`); return null; }
+    return { idx, n };
+  })();
+  const inShard = (i) => !SHARD ||
+    parseInt(crypto.createHash('md5').update(i.id).digest('hex').slice(0, 8), 16) % SHARD.n === SHARD.idx;
+  const priorityItems  = ocrCanonicals.filter(i => prioritySet.has(i.file_path) && bandFilter(i) && inShard(i));
+  const normalItems    = ocrCanonicals.filter(i => !prioritySet.has(i.file_path) && bandFilter(i) && inShard(i));
   // OCR_ORDER=asc → 소형(고가치)부터, 기본 desc → 대형부터
   const asc = (process.env.OCR_ORDER || 'desc').toLowerCase() === 'asc';
   normalItems.sort((a, b) => asc ? a.score - b.score : b.score - a.score);
   if (BAND) {
     const desc = (BAND === 'safe' || BAND === 'risky') ? `M<=${M}MB ∪ 저밀도(≥${MINPG}p,≤${DMAX}MB/p), 격리 ${quarantine.size}건`
       : (BAND === 'light' || BAND === 'heavy') ? `M<=${M}MB` : `P<=${P}, M<=${M}MB`;
-    console.log(`  밴드: ${BAND}(${desc}) → ${normalItems.length + priorityItems.length}건`);
+    console.log(`  밴드: ${BAND}(${desc})${SHARD ? ` · 샤드 ${SHARD.idx}/${SHARD.n}` : ''} → ${normalItems.length + priorityItems.length}건`);
   }
-  else if (PAGE_MIN || PAGE_MAX !== Infinity) console.log(`  페이지 밴드: ${PAGE_MIN}~${PAGE_MAX === Infinity ? '∞' : PAGE_MAX}p → ${normalItems.length + priorityItems.length}건`);
+  else if (PAGE_MIN || PAGE_MAX !== Infinity) console.log(`  페이지 밴드: ${PAGE_MIN}~${PAGE_MAX === Infinity ? '∞' : PAGE_MAX}p${SHARD ? ` · 샤드 ${SHARD.idx}/${SHARD.n}` : ''} → ${normalItems.length + priorityItems.length}건`);
+  else if (SHARD) console.log(`  샤드: ${SHARD.idx}/${SHARD.n} → ${normalItems.length + priorityItems.length}건`);
   console.log(`  정렬: ${asc ? '오름차순(소형 먼저)' : '내림차순(대형 먼저)'}`);
   if (priorityItems.length) console.log(`  우선처리 ${priorityItems.length}건 (priority_ocr.json)`);
   const ocrItems = [...dedupItemsPre, ...priorityItems, ...normalItems, ...cdedupPending];
