@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.8.0] - 2026-07-16
+
+### Added
+- **`scripts/watch_final_merge.sh`** — 라운드 완주 감시 → 최종 병합 → 뒷정리 자동화. 이중 완주 판정(큐 전항목 success/failed + 전 인스턴스 로그 "처리할 파일 없음") 후 `merge_ocr_instance_ckpts.js`를 실행하고, **검증(exit 0)이 통과한 경우에만** 워치독·재배분 모니터를 정리. 실패 시 아무것도 죽이지 않고 수동 확인 요청. `OCR_INSTANCES` 콤마 목록으로 N대 지원. 이로써 scripts/가 수집→변환→회수→OCR→**완주 병합·정리**까지 전 구간 무인화.
+
 ## [1.7.2] - 2026-07-16
 
 ### Added
@@ -103,6 +108,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.8.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.6.0...v1.7.0
