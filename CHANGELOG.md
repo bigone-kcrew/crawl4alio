@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.8.1] - 2026-07-17
+
+### Fixed
+- **'OCR 결과 없음'을 재시도 리셋 목록에서 제거** — genuine 빈 문서는 재시도해도 0.6초 재실패라, 리셋에 있으면 재기동마다 부활→즉시실패→백오프 무한 churn이 되고 open/failed 플래핑으로 완주 판정까지 막는다(실운영 99% 꼬리에서 발생). 전이성 네트워크 오류만 리셋한다.
+
 ## [1.8.0] - 2026-07-16
 
 ### Added
@@ -108,6 +113,7 @@
 
 - 최초 공개 — ALIO 경영공시·법령·기관 내규 수집 및 HWP/PDF/XLSX/DOCX → Markdown 변환 툴킷 (MIT).
 
+[1.8.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.2...v1.8.0
 [1.7.2]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/bigone-kcrew/crawl4alio/compare/v1.7.0...v1.7.1
