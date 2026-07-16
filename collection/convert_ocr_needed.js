@@ -337,7 +337,10 @@ async function main() {
 
   // 미처리 항목만 추출 (OCR 체크포인트 기준)
   // canceled / socket hang up 실패는 리셋하여 재시도
-  const RETRYABLE_ERRORS = ['canceled', 'socket hang up', 'ENETUNREACH', 'ETIMEDOUT', 'Failed to open file', 'OCR 결과 없음'];
+  // ⚠️ 'OCR 결과 없음'은 리셋 금지 — genuine 빈 문서(OCR도 못 읽는)라 재시도해도 0.6초 재실패.
+  //    리셋 목록에 두면 재기동마다 부활→즉시실패→백오프→재기동 무한 churn이 되고,
+  //    완주 판정(open/failed 플래핑)까지 막는다. 네트워크 전이성 오류만 리셋한다.
+  const RETRYABLE_ERRORS = ['canceled', 'socket hang up', 'ENETUNREACH', 'ETIMEDOUT', 'Failed to open file'];
   let resetCount = 0;
   for (const [id, v] of Object.entries(ocrCkpt.files)) {
     if (v.status === 'ocr_failed' && RETRYABLE_ERRORS.some(e => (v.error||'').includes(e))) {
