@@ -13,6 +13,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { once } = require('events');
 
 const ROOT = process.env.RAG_ROOT ? path.join(process.env.RAG_ROOT, '2_data') : path.join(__dirname, '..', '2_data');
 const OUT = path.join(ROOT, '_rag_staging');
@@ -138,9 +139,18 @@ function docMeta(rel) {
 fs.mkdirSync(OUT, { recursive: true });
 const docsOut = fs.createWriteStream(path.join(OUT, 'docs_disclosure.jsonl'));
 const artsOut = fs.createWriteStream(path.join(OUT, 'articles_disclosure.jsonl'));
+docsOut.on('error', e => { console.error('docs 쓰기 실패:', e); process.exit(1); });
+artsOut.on('error', e => { console.error('articles 쓰기 실패:', e); process.exit(1); });
 const stat = { files: 0, docs: 0, chunks: 0, empty: 0, truncated: 0, skippedCa: 0 };
 let seen = 0, samplesShown = 0;
 
+// 동기 루프는 이벤트 루프를 막아 수 GB가 스트림 버퍼에 통째로 쌓였다가
+// 종료 flush에서 writev 실패로 죽는 사고가 있었음(2026-07-17, 4GiB 절단+중복) — drain 대기 필수.
+async function write(stream, line) {
+  if (!stream.write(line)) await once(stream, 'drain');
+}
+
+async function main() {
 for (const abs of walk(BASE)) {
   if (!abs.endsWith('.md')) continue;
   if (abs.includes('단체협약')) { stat.skippedCa++; continue; }  // 이미 ca 코퍼스
@@ -157,16 +167,16 @@ for (const abs of walk(BASE)) {
   const covered = chunks.reduce((s, c) => s + c.length, 0);
   const coverage = contentChars ? +(Math.min(1, covered / contentChars)).toFixed(3) : 0;
 
-  docsOut.write(JSON.stringify({
+  await write(docsOut, JSON.stringify({
     doc_id, corpus: 'disclosure', rel_path: rel, ...dm,
     n_articles: chunks.length, coverage, parse_status,
   }) + '\n');
-  chunks.forEach((body, i) => {
-    artsOut.write(JSON.stringify({
+  for (let i = 0; i < chunks.length; i++) {
+    await write(artsOut, JSON.stringify({
       doc_id, seq: i + 1, section: '본칙', chapter: null, art_no: null, art_sub: null,
-      title: dm.doc_title, text: body, n_chars: body.length,
+      title: dm.doc_title, text: chunks[i], n_chars: chunks[i].length,
     }) + '\n');
-  });
+  }
 
   stat.files++; stat.docs++; stat.chunks += chunks.length;
   if (chunks.length === 0) stat.empty++;
@@ -178,7 +188,11 @@ for (const abs of walk(BASE)) {
     samplesShown++;
   }
 }
-docsOut.end(); artsOut.end();
+// flush 완료까지 대기 — 여기서 실패하면 스테이징이 불완전하므로 반드시 비정상 종료
+await Promise.all([
+  new Promise((res, rej) => docsOut.end(err => err ? rej(err) : res())),
+  new Promise((res, rej) => artsOut.end(err => err ? rej(err) : res())),
+]);
 
 const report = {
   base_files_scanned: seen, docs: stat.docs, chunks: stat.chunks,
@@ -187,3 +201,6 @@ const report = {
 };
 fs.writeFileSync(path.join(OUT, 'coverage_disclosure.json'), JSON.stringify(report, null, 2));
 console.log('\n' + JSON.stringify(report, null, 2));
+}
+
+main().catch(e => { console.error('parse_disclosure 실패:', e); process.exit(1); });
