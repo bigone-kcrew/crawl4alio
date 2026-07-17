@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.2] - 2026-07-17
+
+### Added
+- **rag/validate_staging.js — 적재 전 스테이징 검증 게이트**: 라인 JSON 유효성·(doc_id, seq) 유일성·docs n_articles 합계 대조·NUL(0x00)/제어문자 검사를 한 번에. 같은 날 실사고 두 건(4GiB 절단+60.7만 줄 중복, NUL 1건으로 121만 청크 적재 중단)을 모두 적재 전에 잡을 수 있었던 검사들이다. 121만 청크 실데이터로 검증.
+- **docs/PIPELINE_HARDENING.md** — 대용량 JSONL 쓰기 백프레셔, PG NUL, `| tee` rc 함정과 pipefail 게이트, 단일 파일 HTML 인덱스의 gzip 인라인+async 해제 패턴과 톱레벨 파생 계산 함정, 코드 라벨 추측 금지(카탈로그·실파일 대조) 등 하루치 운영 사고에서 굳힌 원칙 모음.
+
+### Fixed
+- **rag/parse_disclosure.js**: 청크 본문·제목에서 NUL(0x00) 제거 — PostgreSQL TEXT가 유일하게 거부하는 문자로, 변환 산출물 1건에 섞여 들어와 코퍼스 전체 적재를 중단시킨 실사고의 재발 방지.
+
 ## [1.9.1] - 2026-07-17
 
 ### Fixed
