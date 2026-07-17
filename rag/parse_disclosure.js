@@ -172,9 +172,11 @@ for (const abs of walk(BASE)) {
     n_articles: chunks.length, coverage, parse_status,
   }) + '\n');
   for (let i = 0; i < chunks.length; i++) {
+    // PostgreSQL TEXT는 NUL(0x00)을 저장 못 함 — OCR/변환 산출물에 섞여 들어와 적재 전체가 깨진 사고(2026-07-17, 1건)
+    const body = chunks[i].replace(/\u0000/g, '');
     await write(artsOut, JSON.stringify({
       doc_id, seq: i + 1, section: '본칙', chapter: null, art_no: null, art_sub: null,
-      title: dm.doc_title, text: chunks[i], n_chars: chunks[i].length,
+      title: dm.doc_title.replace(/\u0000/g, ''), text: body, n_chars: body.length,
     }) + '\n');
   }
 
