@@ -276,6 +276,26 @@ async function main() {
     await c.query(sql);
     console.log('인덱스:', sql.match(/idx_\w+/)[0], ((Date.now() - t) / 1000).toFixed(1) + 's');
   }
+
+  // 5) article_hash / embed_queue — full 경로도 반드시 채운다.
+  //    (2026-07-18 사고: append만 채우던 탓에 TRUNCATE 재적재분 137만 조문이
+  //     의미검색 조인(articles→article_hash→embeddings)에서 통째로 빠졌음)
+  await c.query(`CREATE TABLE IF NOT EXISTS article_hash (id bigint PRIMARY KEY, text_hash text NOT NULL)`);
+  await c.query(`CREATE TABLE IF NOT EXISTS embed_queue (text_hash text PRIMARY KEY, id bigint NOT NULL)`);
+  const dh = await c.query(`DELETE FROM article_hash h WHERE NOT EXISTS (SELECT 1 FROM articles a WHERE a.id = h.id)`);
+  const dq = await c.query(`DELETE FROM embed_queue q WHERE NOT EXISTS (SELECT 1 FROM articles a WHERE a.id = q.id)`);
+  const ih = await c.query(`
+    INSERT INTO article_hash (id, text_hash)
+    SELECT a.id, md5( (CASE WHEN a.title IS NOT NULL AND a.title<>'' THEN a.title||E'\n' ELSE '' END) || left(a.body,4000) )
+    FROM articles a
+    ON CONFLICT (id) DO NOTHING`);
+  const iq = await c.query(`
+    INSERT INTO embed_queue (text_hash, id)
+    SELECT DISTINCT ON (h.text_hash) h.text_hash, h.id
+    FROM article_hash h
+    ON CONFLICT (text_hash) DO NOTHING`);
+  console.log(`article_hash: dangling -${dh.rowCount}, 신규 +${ih.rowCount} | embed_queue: dangling -${dq.rowCount}, 신규 +${iq.rowCount}`);
+
   await c.query('ANALYZE');
   await c.query(`UPDATE load_runs SET finished_at=now(), n_docs=$1, n_articles=$2 WHERE id=$3`, [nDocs, nArts, runId]);
 
