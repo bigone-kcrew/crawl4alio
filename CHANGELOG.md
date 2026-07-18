@@ -2,6 +2,12 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.3] - 2026-07-18
+
+### Changed
+- **내장 kordoc 4.0.8 → 4.2.0**: 변환 품질 개선분 수용 — HWP3 rhwp 업스트림 정합 3종(탭 8byte 구조·필드코드/책갈피 스트림 소비·사적 graphic char 매핑으로 로마숫자·원문자·글머리 복원, 업스트림 실측 77→1058 문단 복구), 수식 OCR 페이지 off-by-one, XLSX keepTrailingEmptyCols 배선 누락 수정 등. `callKordoc` 어댑터(parse→markdown/success/warnings 계약·stripDanglingImageRefs) 무변경으로 호환 확인(4.2.0 parse 계약·121만 규모 파이프라인 스모크 통과).
+- **kordoc 내장 텍스트 OCR(PP-OCRv5 korean, onnxruntime-node) 사용 가능해짐 — 단 기본 off(opt-in)**: `parse(buf,{ocr:true})`/CLI `--ocr`. 기본 파이프라인 동작은 불변(스캔본은 종전대로 needsOcr 신호만 내고 외부 OCR 경로로). 성능 주의: 실측 M-series 0.9s/page 기준이라 저사양 상시 OCR엔 부적합 — 대량은 별도 OCR 워커, 소량 증분만 로컬 검토(운영 전략은 alio 메모리 참조).
+
 ## [1.9.2] - 2026-07-17
 
 ### Added
