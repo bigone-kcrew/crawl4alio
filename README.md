@@ -153,10 +153,27 @@ node collection/sync_alio.js --mode=apply      # 감지 즉시 수집
 |------|------|
 | `CRAWL4AI_URL` / `CRAWL4AI_API_TOKEN` | ALIO 상세페이지 크롤링 엔드포인트·토큰 |
 | `KORDOC_PARSE_URL` | kordoc HTTP 서버(미설정 시 npm 내장 사용) |
+| `KORDOC_OCR` | 내장 kordoc(4.2.0+) 텍스트 OCR 스위치. **기본 off** · `1`/`on`=needsOcr 페이지만 · `force`=전 페이지. OCR 워커 머신에서만 켠다 |
 | `MARKITDOWN_PARSE_URL` | markitdown 폴백(선택) |
-| `PADDLEOCR_PARSE_URL` | PaddleOCR OCR 엔드포인트 |
+| `PADDLEOCR_PARSE_URL` | 외부 PaddleOCR OCR 엔드포인트(HTTP 방식). `KORDOC_OCR` 로컬 OCR과 택일 |
 | `OPENAPILAWKEY` / `LAW_OC` | law.go.kr Open API 이용자 ID |
 | `CONCURRENT` / `CONCURRENT_LARGE` / `LARGE_FILE_MB` | 동시성·대용량 튜닝 |
+
+### 배포 프로파일 (브랜치 아님 — 같은 코드, env 조합만 다름)
+
+변환·OCR 스택은 **하나의 코드베이스**에서 env로 모드를 고른다. 별도 브랜치를 파지 않는다
+— 프로파일은 "어떤 env를 켜느냐"의 문제일 뿐이다. (수집 단계 crawl4ai는 어느 프로파일이든 필요 — 역할이 다르다: crawl4ai=웹 상세페이지 수집, kordoc=내려받은 첨부 변환.)
+
+| 프로파일 | 설정 | 쓰임새 |
+|---|---|---|
+| **올인원(kordoc 내장)** | env 없음(텍스트) / OCR 워커만 `KORDOC_OCR=1` | 서버 불필요. kordoc npm 하나로 변환+OCR. 소규모·단일 호스트·오프라인 |
+| **서버형(HTTP)** | `KORDOC_PARSE_URL`·`PADDLEOCR_PARSE_URL`·(선택)`MARKITDOWN_PARSE_URL` | 파서를 별도 컨테이너/서버로. 대규모·언어혼합·기존 인프라 |
+
+**OCR 두 경로(택일)**:
+- **로컬 내장** `KORDOC_OCR=1` — kordoc 4.2.0의 PP-OCRv5(onnxruntime) 로컬 추론. `needsOcr` 페이지만 OCR하고 정상 페이지 텍스트는 유지, 스캔 표를 HTML 표로 복원. 서버·포트 불필요. 첫 실행 시 모델 ~18MB 자동 다운로드(`kordoc check-ocr-models`로 사전 준비 가능) → **오프라인 워커는 모델 캐시 선배포 필요**.
+- **외부 HTTP** `PADDLEOCR_PARSE_URL` — 기존 PaddleOCR 서버(하위호환).
+
+> ⚠️ **성능**: 내장 OCR은 CPU 추론이라 저사양(예: 셀러론/J1900)에서 **상시·대량은 부적합**. 실측 M-series 0.9s/page 기준. 저사양 호스트는 `KORDOC_OCR`을 끄고(기본) 변환·서빙만 맡기고, OCR은 성능 좋은 워커에 `KORDOC_OCR=1`로 몰아준다. `OCR_SHARD`로 여러 워커에 분산 가능(아래).
 
 **데이터 폴더 분리 (`CATALOG_ROOT`)** — 코드와 데이터를 심링크 없이 분리:
 
@@ -202,6 +219,14 @@ OCR_BAND=safe OCR_SPLIT_PAGES=72 OCR_CHUNK_PAGES=6 OCR_MAX_TIMEOUT=480000 OCR_OR
   PADDLEOCR_PARSE_URL=http://PC2:13430/parse npm run convert:ocr
 ```
 > 저RAM PC의 OCR 서버엔 **RSS 초과·요청 hang 시 프로세스 자가종료**(컨테이너 `restart` 정책으로 재기동)를 넣어두면, 드물게 OOM을 유발하는 문서를 만나도 무인 자기치유된다(자가종료→재기동→클라이언트가 `OCR_INFLIGHT_PATH`의 문서를 `OCR_QUARANTINE_PATH`에 올려 고RAM PC로 이관). `SPLIT_PAGES`/밴드는 인스턴스 수만큼 조정.
+
+**kordoc 로컬 OCR로 워커 구성** — 위 예의 `PADDLEOCR_PARSE_URL=...`(HTTP 서버) 대신 워커 머신에서 `KORDOC_OCR=1`을 켜면 별도 OCR 서버 없이 같은 샤딩·밴드 로직으로 돈다. 밴드/샤드/타임아웃 노브는 그대로 재사용:
+```bash
+# OCR 워커(예: N100) — kordoc 내장 OCR, 서버 불필요
+KORDOC_OCR=1 OCR_BAND=safe OCR_SHARD=0/2 OCR_ORDER=asc \
+  OCR_CKPT_PATH=$D/ck_w1.json OCR_LOCK_PATH=$D/w1.lock npm run convert:ocr
+```
+저사양 오케스트레이터(변환·서빙 전담)는 `KORDOC_OCR`을 끈 채(기본) 두면 OCR 부하를 받지 않는다.
 
 ## 📁 프로젝트 구조
 

@@ -14,6 +14,13 @@
 
 const KORDOC_HTTP_URL = (process.env.KORDOC_PARSE_URL || process.env.KORDOC_URL || '').trim();
 const MARKITDOWN_HTTP_URL = (process.env.MARKITDOWN_PARSE_URL || '').trim();
+// KORDOC_OCR: 내장 kordoc(4.2.0+) 텍스트 OCR 스위치. 기본 off — 안 켜면 스캔본은
+// 종전대로 빈 markdown → 호출부의 ocr_needed 판정으로 넘어간다(NAS 등 저사양 안전).
+// '1'|'true'|'on' → needsOcr 페이지만 OCR / 'force'|'all' → 전 페이지 OCR.
+// OCR 워커 머신(예: N100)에서만 이 env를 켜서 로컬 추론 OCR을 담당하게 한다.
+const KORDOC_OCR = (process.env.KORDOC_OCR || '').trim().toLowerCase();
+const KORDOC_OCR_MODE = ['1', 'true', 'on', 'yes'].includes(KORDOC_OCR) ? true
+    : (['force', 'all'].includes(KORDOC_OCR) ? 'force' : false);
 
 let kordocLib = null; // null=미시도, false=로드 실패, object=로드됨
 function loadKordoc() {
@@ -23,11 +30,14 @@ function loadKordoc() {
     return kordocLib;
 }
 
-/** 'http' | 'local' | 'none' */
+/** 'http' | 'local' | 'none' (+OCR 스위치 상태는 kordocOcrMode) */
 function kordocMode() {
     if (KORDOC_HTTP_URL) return 'http';
     return loadKordoc() ? 'local' : 'none';
 }
+
+/** 내장 OCR 스위치 상태: false | true(needsOcr 페이지) | 'force'(전 페이지) */
+function kordocOcrMode() { return KORDOC_OCR_MODE; }
 
 async function callHttpParser(url, buf, filename, timeoutMs) {
     const form = new FormData();
@@ -50,7 +60,9 @@ async function callKordocLocal(buf, filename) {
         return { ok: false, error: { code: 'KORDOC_UNAVAILABLE', message: 'kordoc npm 미설치 (npm install 필요)' } };
     }
     try {
-        const result = await kordoc.parse(buf, { filename });
+        const opts = { filename };
+        if (KORDOC_OCR_MODE) opts.ocr = KORDOC_OCR_MODE; // true=needsOcr 페이지만, 'force'=전 페이지
+        const result = await kordoc.parse(buf, opts);
         if (result && result.success === false) {
             const message = (result.warnings || []).join('; ') || 'kordoc parse 실패';
             return { ok: false, error: { code: 'PARSE_FAILED', message } };
@@ -95,6 +107,7 @@ async function callMarkitdown(buf, filename, timeoutMs) {
 
 module.exports = {
     kordocMode,
+    kordocOcrMode,
     callKordoc,
     callMarkitdown,
     callHttpParser,
