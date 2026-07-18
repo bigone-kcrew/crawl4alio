@@ -254,14 +254,15 @@ function buildMarkdown(markdownContent, meta, parseUrl) {
     year:          String(meta.year),
     source_url:    meta.source_url || '',
     original_file: meta.original_file,
-    ocr_service:   'paddleocr',
+    ocr_service:   global.__OCR_ENGINE || 'paddleocr',
     ocr_endpoint:  parseUrl,
     converted_at:  new Date().toISOString(),
     source_ext:    'pdf',
   }, { lineWidth: -1 });
 
   const body = markdownContent.trim();
-  return `---\n${fm}---\n\n${body}\n\n<!-- source: ${meta.original_file} -->\n<!-- ocr: paddleocr -->\n`;
+  const engine = global.__OCR_ENGINE || 'paddleocr';
+  return `---\n${fm}---\n\n${body}\n\n<!-- source: ${meta.original_file} -->\n<!-- ocr: ${engine} -->\n`;
 }
 
 // ── OCR 전용 체크포인트 저장 (원자적 쓰기로 중간 상태 방지) ───────────────────
@@ -304,12 +305,18 @@ async function main() {
   const envFile = loadEnvFile();
   if (envFile) console.log(`[ENV] ${envFile}`);
 
-  const parseUrl = process.env.PADDLEOCR_PARSE_URL
+  // OCR 엔진 선택 — HTTP 응답 계약({result:{markdown}} 또는 문자열)이 동일하므로
+  // 호출부는 엔진 무관. paddleocr(기본, 하위호환) / kordoc(4.2 --ocr 서버) 라벨·URL만 분기.
+  //   OCR_ENGINE=kordoc OCR_PARSE_URL=http://n100:3400/parse
+  const OCR_ENGINE = (process.env.OCR_ENGINE || 'paddleocr').trim().toLowerCase();
+  const parseUrl = process.env.OCR_PARSE_URL
+    || process.env.PADDLEOCR_PARSE_URL
     || (process.env.PADDLEOCR_BASE_URL ? process.env.PADDLEOCR_BASE_URL.replace(/\/$/, '') + '/parse' : '');
   if (!parseUrl) {
-    throw new Error('PADDLEOCR_PARSE_URL 또는 PADDLEOCR_BASE_URL 환경변수가 필요합니다.');
+    throw new Error('OCR_PARSE_URL / PADDLEOCR_PARSE_URL / PADDLEOCR_BASE_URL 중 하나가 필요합니다.');
   }
-  console.log(`[OCR] ${parseUrl}`);
+  console.log(`[OCR] engine=${OCR_ENGINE} ${parseUrl}`);
+  global.__OCR_ENGINE = OCR_ENGINE; // buildMarkdown·체크포인트 라벨에서 참조
 
   // 인덱스 로드 (메타데이터 조회용)
   console.log('\n인덱스 로드 중...');
@@ -641,7 +648,7 @@ async function main() {
 
     ocrCkpt.files[item.id] = {
       status: 'success',
-      parser: 'paddleocr',
+      parser: global.__OCR_ENGINE || 'paddleocr',
       output: outputPath,
       ...(fileHash ? { pdf_hash: fileHash } : {}),
       processed_at: new Date().toISOString(),
