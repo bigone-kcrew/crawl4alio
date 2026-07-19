@@ -26,7 +26,7 @@ const axios = require('axios');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
 const { sanitizeSegment } = require(path.join(__dirname, 'project/crawler/utils/disclosure_scope'));
 const alioApi = require(path.join(__dirname, 'project/crawler/utils/alio_api'));
-const { fromCatalogRoot, fromLogsRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
+const { fromCatalogRoot, fromLogsRoot, fromStructuredRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
 
 const ALIO_BASE = alioApi.ALIO_BASE || 'https://www.alio.go.kr';
 const ALL_CATEGORIES = ['공고문', '입사지원서', '직무기술서', '기타 첨부파일'];
@@ -108,7 +108,7 @@ function parseArgs(argv) {
         categories: ['공고문', '입사지원서', '직무기술서'],
         apba: null,
         limit: 0,
-        out: fromCatalogRoot('structured_data'),
+        out: fromStructuredRoot(),
         dryRun: false
     };
     for (let i = 2; i < argv.length; i += 1) {

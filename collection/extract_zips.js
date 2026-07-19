@@ -18,7 +18,7 @@
 'use strict';
 
 const fs = require('fs');
-const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot, fromLogsRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
@@ -26,7 +26,7 @@ const args = process.argv.slice(2);
 const flag = n => args.includes(n);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
 
-const ROOT = path.resolve(opt('--root', fromCatalogRoot('structured_data')));
+const ROOT = path.resolve(opt('--root', fromStructuredRoot()));
 const DRY = flag('--dry');
 const FORCE = flag('--force');
 const KEEP_ZIP = flag('--keep-zip'); // 기본: 해제 성공 후 원본 ZIP 삭제

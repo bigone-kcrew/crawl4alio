@@ -31,7 +31,7 @@ const yaml   = require('js-yaml');
 process.on('SIGPIPE', () => {});
 
 // 경로는 카탈로그 루트 기준 (CATALOG_ROOT env로 데이터 폴더 전체 이동 가능)
-const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot, fromLogsRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 
 // TTY 환경: 파일 + stdout 동시 기록 / nohup 리다이렉트 환경: stdout만(nohup이 파일로 연결)
 const LOG_PATH = fromLogsRoot('conversion_run.log');
@@ -94,7 +94,7 @@ const OCR_ERROR_PATTERNS = [
 // ── 경로 ───────────────────────────────────────────────────────────────────────
 
 const ROOT             = path.join(__dirname, '..');
-const STRUCTURED_DIR   = fromCatalogRoot('structured_data');
+const STRUCTURED_DIR   = fromStructuredRoot();
 // --index <path>: 변환 입력 인덱스 교체 (예: 게시판 첨부 전용 board_files_index.json)
 const indexArgIdx = process.argv.indexOf('--index');
 const INDEX_PATH       = indexArgIdx >= 0 && process.argv[indexArgIdx + 1]

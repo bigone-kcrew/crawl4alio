@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.4] - 2026-07-20
+
+### Changed
+- **structured_data 심링크 은퇴 → `DATA_ROOT` env + `fromStructuredRoot()`**: 구조화 코퍼스 트리 기준을 심링크(structured_data)가 아니라 실경로로 직접 지정. `fromCatalogRoot("structured_data")` 11개 호출부를 `fromStructuredRoot()`로 중앙화(paths.js). 미지정 시 catalogRoot/structured_data 하위호환. 프로덕션: `DATA_ROOT=<...>/alio-md/자료/기관별공시`. alio측 체크포인트(conversion 135,503+ocr 18,371 경로)·코드 동반 치환, 심링크 2개 제거. 런타임·경로해석 검증 완료.
+
 ## [1.9.3] - 2026-07-18
 
 ### Changed

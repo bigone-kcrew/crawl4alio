@@ -32,7 +32,7 @@ const alioApi = require('./project/crawler/utils/alio_api');
 const { buildDisclosureLookup } = require('./project/crawler/utils/disclosure_scope');
 
 const DATA_DIR = require('./project/crawler/utils/paths').catalogRoot;
-const STRUCTURED_DIR = path.join(DATA_DIR, 'structured_data');
+const STRUCTURED_DIR = require('./project/crawler/utils/paths').fromStructuredRoot();
 const LOGS_DIR = path.join(DATA_DIR, 'logs');
 const CHECKPOINT_PATH = path.join(LOGS_DIR, 'sync_alio_checkpoint.json');
 const RETRY_TARGETS_PATH = path.join(LOGS_DIR, 'recency_retry_targets.json');

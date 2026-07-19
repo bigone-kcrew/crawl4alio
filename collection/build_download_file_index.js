@@ -1,6 +1,6 @@
 const fs   = require('fs');
 const path = require('path');
-const { fromCatalogRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 const { rebuildStructuredDownloadFileIndex, DOWNLOAD_FILE_INDEX_FILE_NAME, resolveRawBase, originalFileExists } = require('./project/crawler/utils/structured_explorer');
 
 // CONVERTIBLE_EXTS: ZIP 추출 대상 확장자
@@ -17,7 +17,7 @@ function walk(dir) {
 }
 
 function main() {
-    const structuredBase = fromCatalogRoot('structured_data');
+    const structuredBase = fromStructuredRoot();
     const indexPath = path.join(structuredBase, DOWNLOAD_FILE_INDEX_FILE_NAME);
 
     // 1. 기존 인덱스 보존 (rebuild 전에 읽어둠)

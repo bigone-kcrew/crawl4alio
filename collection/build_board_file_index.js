@@ -18,7 +18,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { fromCatalogRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 const { resolveRawBase } = require('./project/crawler/utils/structured_explorer');
 
 const CONVERTIBLE = new Set(['.pdf', '.hwp', '.hwpx', '.hwpml', '.xlsx', '.xls', '.docx']);
@@ -37,7 +37,7 @@ function parseInstitution(folderName) {
 }
 
 function main() {
-    const structuredBase = fromCatalogRoot('structured_data');
+    const structuredBase = fromStructuredRoot();
     const rawBase = resolveRawBase(structuredBase) || structuredBase;
     const outPath = path.join(structuredBase, 'board_files_index.json');
 

@@ -12,6 +12,12 @@ const catalogRoot = process.env.CATALOG_ROOT
     : path.join(repoRoot, 'data');
 const processedDataRoot = path.join(catalogRoot, 'data');
 const logsRoot = path.join(catalogRoot, 'logs');
+// DATA_ROOT: 구조화(structured) 코퍼스 트리의 기준. 심링크(structured_data) 은퇴 후
+// 실경로를 직접 가리킨다. 미지정 시 하위호환으로 catalogRoot/structured_data.
+// 프로덕션(2026-07-20~): DATA_ROOT=/workspace/alio/2_data/alio-md/자료/기관별공시
+const structuredRoot = process.env.DATA_ROOT
+    ? path.resolve(process.env.DATA_ROOT)
+    : path.join(catalogRoot, 'structured_data');
 
 function fromRepoRoot(...segments) {
     return path.join(repoRoot, ...segments);
@@ -33,6 +39,10 @@ function fromProcessedDataRoot(...segments) {
     return path.join(processedDataRoot, ...segments);
 }
 
+function fromStructuredRoot(...segments) {
+    return path.join(structuredRoot, ...segments);
+}
+
 function fromLogsRoot(...segments) {
     return path.join(logsRoot, ...segments);
 }
@@ -43,11 +53,13 @@ module.exports = {
     crawlerRoot,
     catalogRoot,
     processedDataRoot,
+    structuredRoot,
     logsRoot,
     fromRepoRoot,
     fromCollectionRoot,
     fromCrawlerRoot,
     fromCatalogRoot,
     fromProcessedDataRoot,
+    fromStructuredRoot,
     fromLogsRoot
 };

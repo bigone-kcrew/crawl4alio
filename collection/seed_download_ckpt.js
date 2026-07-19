@@ -15,7 +15,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot, fromLogsRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 
 const CKPT_PATH = process.env.DOWNLOAD_CKPT_PATH || fromLogsRoot('download_ckpt.json');
 const DRY = process.argv.includes('--dry-run');
@@ -26,7 +26,7 @@ function loadCkpt(p) {
 }
 
 function main() {
-    const structuredBase = fromCatalogRoot('structured_data');
+    const structuredBase = fromStructuredRoot();
     const ckpt = loadCkpt(CKPT_PATH);
     const before = Object.keys(ckpt.done).length;
     let scanned = 0, seeded = 0, skippedBoard = 0;

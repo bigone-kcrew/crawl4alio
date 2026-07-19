@@ -3,7 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const yaml = require('js-yaml');
 const logger = require(path.join(__dirname, 'project/crawler/utils/logging'));
-const { fromCatalogRoot, fromLogsRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
+const { fromCatalogRoot, fromLogsRoot, fromStructuredRoot } = require(path.join(__dirname, 'project/crawler/utils/paths'));
 const {
     buildDisclosureLookup,
     buildStructuredPaths,
@@ -327,7 +327,7 @@ async function downloadDocuments() {
         return;
     }
 
-    const structuredBase = fromCatalogRoot('structured_data');
+    const structuredBase = fromStructuredRoot();
     // 원본 바이너리 저장 루트(raw). 메타(content.json/manifest 등)는 structuredBase(alio-md)에 유지,
     // 첨부 원본만 alio-raw 미러로 분리. 미지정 시 structuredBase 실경로의 alio-md→alio-raw 치환.
     const rawBase = process.env.ALIO_RAW_BASE

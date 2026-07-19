@@ -29,7 +29,7 @@
 'use strict';
 
 const fs     = require('fs');
-const { fromCatalogRoot, fromLogsRoot } = require('./project/crawler/utils/paths');
+const { fromCatalogRoot, fromLogsRoot , fromStructuredRoot } = require('./project/crawler/utils/paths');
 const path   = require('path');
 const crypto = require('crypto');
 const axios  = require('axios');
@@ -54,7 +54,7 @@ console.log = (...args) => {
 
 // ── 경로 ───────────────────────────────────────────────────────────────────────
 const ROOT            = path.join(__dirname, '..');
-const STRUCTURED_DIR  = fromCatalogRoot('structured_data');
+const STRUCTURED_DIR  = fromStructuredRoot();
 const INDEX_PATH      = path.join(STRUCTURED_DIR, 'download_files_index.json');
 const MAIN_CKPT_PATH  = fromLogsRoot('conversion_checkpoint.json');
 // 메인 변환과 충돌 방지: OCR 전용 별도 체크포인트 사용
