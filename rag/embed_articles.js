@@ -110,7 +110,9 @@ async function main() {
     user: env.POSTGRES_USER, password: env.POSTGRES_PASSWORD, database: 'alio_rag',
   });
   await c.connect();
-  await c.query("SET statement_timeout='300s'");
+  // 300s→900s (2026-07-18): 벡터 2백만+ 성장 후 대기열 안티조인이 동시 IO 부하(검증 작업 등)와
+  // 겹치면 300초를 넘겨 중단되는 사고 — 재개 가능하지만 무인 완주를 위해 여유 확보
+  await c.query("SET statement_timeout='900s'");
 
   const pilotCond = args.pilot ? `AND a.title ~ '${PILOT_RE}'` : '';
   const t0 = Date.now();
@@ -128,26 +130,49 @@ async function main() {
       LIMIT $1`, [fetchN]);
     if (!rows.length) break;
 
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const slice = rows.slice(i, i + BATCH);
-      const texts = slice.map(r =>
-        ((r.title ? r.title + '\n' : '') + r.body).slice(0, MAX_CHARS));
-      const vecs = await embedWithRetry(env.NVIDIA_API_KEY, texts);
+    // 배치 슬라이스를 EMBED_CONCURRENCY개씩 동시 처리 — API 왕복 대기(배치당 ~18s)를 병렬화.
+    // 병목은 NVIDIA API 왕복이지 CPU/DB가 아니므로 동시성이 처리량을 배수로 올린다.
+    // DB insert는 단일 Client라 직렬화되지만 128행 insert는 API 대비 무시할 수준.
+    // 429(rate limit) 나면 embedWithRetry가 백오프 — 그때 이 값을 낮춘다(기본 4는 실측상 여유).
+    const CONCURRENCY = Math.max(1, parseInt(process.env.EMBED_CONCURRENCY || '4', 10));
+    const slices = [];
+    for (let i = 0; i < rows.length; i += BATCH) slices.push(rows.slice(i, i + BATCH));
 
-      const hashes = slice.map(r => r.text_hash);
-      const vecStrs = vecs.map(v => '[' + v.map(x => x.toFixed(6)).join(',') + ']');
-      await c.query(`
-        INSERT INTO article_embeddings (text_hash, embedding, model)
-        SELECT h, v::vector(${DIM}), '${MODEL}'
-        FROM unnest($1::text[], $2::text[]) AS t(h, v)
-        ON CONFLICT (text_hash) DO NOTHING`, [hashes, vecStrs]);
+    // 단일 Client는 동시 query를 지원 안 함(pg 경고/pg9 오류) → API는 병렬로 두되
+    // DB insert만 뮤텍스로 직렬화(insert는 API 대비 짧아 병목 아님).
+    let dbLock = Promise.resolve();
+    const withDb = async (fn) => {
+      const prev = dbLock;
+      let release;
+      dbLock = new Promise(r => (release = r));
+      await prev.catch(() => {});
+      try { return await fn(); } finally { release(); }
+    };
 
-      done += slice.length;
-      if (done % (BATCH * 10) < BATCH) {
-        const rate = done / ((Date.now() - t0) / 60000);
-        console.log(`${done}건 완료 — ${rate.toFixed(0)}건/분`);
+    let si = 0;
+    const worker = async () => {
+      while (si < slices.length) {
+        const slice = slices[si++];
+        const texts = slice.map(r =>
+          ((r.title ? r.title + '\n' : '') + r.body).slice(0, MAX_CHARS));
+        const vecs = await embedWithRetry(env.NVIDIA_API_KEY, texts);
+
+        const hashes = slice.map(r => r.text_hash);
+        const vecStrs = vecs.map(v => '[' + v.map(x => x.toFixed(6)).join(',') + ']');
+        await withDb(() => c.query(`
+          INSERT INTO article_embeddings (text_hash, embedding, model)
+          SELECT h, v::vector(${DIM}), '${MODEL}'
+          FROM unnest($1::text[], $2::text[]) AS t(h, v)
+          ON CONFLICT (text_hash) DO NOTHING`, [hashes, vecStrs]));
+
+        done += slice.length;
+        if (done % (BATCH * 10) < BATCH) {
+          const rate = done / ((Date.now() - t0) / 60000);
+          console.log(`${done}건 완료 — ${rate.toFixed(0)}건/분`);
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slices.length) }, worker));
   }
 
   const s = await c.query('SELECT count(*) n FROM article_embeddings');

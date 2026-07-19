@@ -5,6 +5,7 @@
 ## [1.9.3] - 2026-07-18
 
 ### Changed
+- **rag/embed_articles.js 임베딩 동시성(EMBED_CONCURRENCY, 기본 4) + DB insert 뮤텍스**: 배치 슬라이스를 동시 API 호출로 병렬화(단일 Client 동시 query 경고 방지 위해 insert만 직렬화). HNSW 인덱스 DROP 후 대량 적재와 결합 시 실측 18.8배 가속(428→8,832건/분). 대량 재적재 표준: 인덱스 DROP→벌크 적재→재생성.
 - **내장 kordoc 4.0.8 → 4.2.0**: 변환 품질 개선분 수용 — HWP3 rhwp 업스트림 정합 3종(탭 8byte 구조·필드코드/책갈피 스트림 소비·사적 graphic char 매핑으로 로마숫자·원문자·글머리 복원, 업스트림 실측 77→1058 문단 복구), 수식 OCR 페이지 off-by-one, XLSX keepTrailingEmptyCols 배선 누락 수정 등. `callKordoc` 어댑터(parse→markdown/success/warnings 계약·stripDanglingImageRefs) 무변경으로 호환 확인(4.2.0 parse 계약·121만 규모 파이프라인 스모크 통과).
 - **OCR 엔진 배선 일반화 — `OCR_ENGINE`·`OCR_PARSE_URL`**: convert_ocr_needed가 엔진 무관(HTTP 응답 계약 {result:{markdown}} 동일). paddleocr(기본)↔kordoc 서버를 env 두 개로 전환, 메타·체크포인트 parser 라벨 정확화. PaddleOCR 안 내리고 URL만 바꿔 A/B·롤백 가능.
 - **kordoc 내장 텍스트 OCR(PP-OCRv5 korean, onnxruntime-node) — `KORDOC_OCR` env 스위치 추가**: 기본 off(현행 동작 불변, 저사양 안전). `1`/`on`=needsOcr 페이지만, `force`=전 페이지. `callKordoc` 어댑터가 `parse(...,{ocr})`로 전달, `kordocOcrMode()` 진단 export. **배포 프로파일**(올인원 kordoc vs 서버형 HTTP)을 README에 문서화 — 별도 브랜치 없이 env 조합으로 표현. PaddleOCR HTTP 경로는 하위호환 유지(택일). 성능: M-series 0.9s/page 실측, 저사양 상시 대량 OCR 부적합 → OCR 워커에만 스위치 on(OCR_SHARD 재사용).
