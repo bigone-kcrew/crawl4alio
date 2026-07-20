@@ -8,7 +8,8 @@
 | 파서 | 역할 | 기본 연결 | 환경변수 |
 |---|---|---|---|
 | **kordoc** | HWP3/5·HWPX·HWPML·PDF·XLS(X)·DOCX → MD (1차) | **내장 npm (서버 불필요)** | `KORDOC_PARSE_URL` 설정 시 HTTP 모드 |
-| **PaddleOCR** | 스캔 PDF/이미지 OCR (최종 폴백) | HTTP 서버 필수 | `PADDLEOCR_PARSE_URL` |
+| **kordoc (OCR)** | 스캔 PDF/이미지 OCR (**기본 엔진**, kordoc 4.2 `--ocr`) | `--ocr` 활성 HTTP 서버 필요 | `OCR_ENGINE=kordoc`(기본) · `KORDOC_PARSE_URL`/`OCR_PARSE_URL` |
+| PaddleOCR | 스캔 PDF/이미지 OCR (**legacy/optional** 폴백) | HTTP 서버 필수 | `OCR_ENGINE=paddleocr` · `PADDLEOCR_PARSE_URL` |
 | **Crawl4AI** | ALIO 상세페이지(JS 렌더링) 크롤 | HTTP 서버 필수 | `CRAWL4AI_URL`, `CRAWL4AI_HOST`, `CRAWL4AI_API_TOKEN` |
 | markitdown | 선택 폴백 (pptx 등) | 미설정 시 건너뜀 | `MARKITDOWN_PARSE_URL` |
 
@@ -62,9 +63,19 @@ IMAGE_BASED_PDF · Jbig2Error · JBig2 · 이미지 기반 PDF
 `npm install` 시 [kordoc](https://github.com/chrisryugj/kordoc)이 의존성으로 설치되어 in-process로 동작합니다.
 별도 서버(예: 사내 공용 파서)를 쓰려면 위 `/parse` 계약을 구현한 엔드포인트를 `KORDOC_PARSE_URL`에 지정하세요.
 
-### PaddleOCR — 참조 구현 제공
+### OCR 엔진 — 기본 kordoc
+스캔 PDF/이미지 OCR의 **기본 엔진은 kordoc**입니다(`OCR_ENGINE=kordoc`, 기본값). in-process kordoc은
+문서 변환 전용이라 **OCR은 kordoc 4.2 `--ocr`가 활성화된 별도 서버가 필요**합니다 —
+그 엔드포인트를 `KORDOC_PARSE_URL`(또는 `OCR_PARSE_URL`)에 지정하세요.
 ```bash
-cd deploy && docker compose up -d paddleocr
+# kordoc --ocr 서버 예시(외부 호스트/워커에서 기동)
+OCR_ENGINE=kordoc  KORDOC_PARSE_URL=http://<host>:3400/parse  node collection/convert_ocr_needed.js
+```
+
+### PaddleOCR — (legacy/optional) 폴백 참조 구현
+kordoc OCR을 못 쓰는 환경의 폴백. `OCR_ENGINE=paddleocr` 로 전환해 사용합니다.
+```bash
+cd deploy && docker compose --profile legacy-ocr up -d paddleocr
 # 또는 직접: cd deploy/paddleocr-parser && pip install -r requirements.txt && uvicorn main:app --port 13430
 ```
 - 버전 고정: `paddleocr==3.6.0` (최신의 직전 버전 — 안정성 우선)

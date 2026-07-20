@@ -23,19 +23,22 @@ cp .env.example .env.api   # 편집: OPENAPILAWKEY(law.go.kr 키) 입력
 
 ## 2. 파서 컨테이너 기동
 
-이 프로젝트가 쓰는 컨테이너(crawl4ai 공식 이미지, paddleocr 자체 이미지)는 **별도 설치 과정이 없습니다** —
+이 프로젝트가 쓰는 컨테이너(crawl4ai 공식 이미지)는 **별도 설치 과정이 없습니다** —
 아래 명령 한 번이면 이미지 다운로드부터 실행까지 자동으로 끝납니다(Docker 엔진만 있으면 됨).
 
 ```bash
 cd deploy
-docker compose up -d crawl4ai paddleocr   # 이미지 자동 pull/build + 컨테이너 기동
-docker compose ps          # 두 서비스 Up 확인
+docker compose up -d crawl4ai   # 이미지 자동 pull + 컨테이너 기동
+docker compose ps               # crawl4ai Up 확인
 ```
 
-- **paddleocr 최초 기동**: PP-StructureV3 모델 다운로드(수백 MB)로 첫 요청까지 수 분 걸립니다.
-  모델은 `paddlex-models` 볼륨에 저장되어 재기동 시 즉시 사용됩니다.
-  로딩 상태 확인: `curl http://localhost:13430/health` → `"ready": true`
 - **crawl4ai 확인**: `curl http://localhost:11235/health`
+- **OCR (기본 kordoc)**: 스캔본 OCR은 kordoc 4.2 `--ocr` 서버가 필요합니다.
+  `.env.api`에 `KORDOC_PARSE_URL`(또는 `OCR_PARSE_URL`)로 외부 kordoc `--ocr` 서버를 지정하세요.
+- **(legacy) PaddleOCR 폴백**: kordoc OCR을 못 쓰는 환경에서만.
+  `docker compose --profile legacy-ocr up -d paddleocr` 로 기동한 뒤 `OCR_ENGINE=paddleocr` 로 전환.
+  최초 기동 시 PP-StructureV3 모델 다운로드(수백 MB)로 첫 요청까지 수 분(paddlex-models 볼륨 영속).
+  로딩 확인: `curl http://localhost:13430/health` → `"ready": true`
 
 ## 3. 앱 실행 방식 선택
 

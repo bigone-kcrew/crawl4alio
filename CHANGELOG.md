@@ -2,6 +2,16 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.5] - 2026-07-20
+
+### Changed
+- **기본 OCR 엔진 kordoc으로 전환** (⚠️ BREAKING): `OCR_ENGINE` 기본값을 `paddleocr`→`kordoc`(4.2 `--ocr`). `convert_ocr_needed.js`의 OCR URL 해석을 엔진 정합으로 변경 — `OCR_PARSE_URL`(명시)가 최우선, 없으면 엔진별 기본(`kordoc`→`KORDOC_PARSE_URL`/`KORDOC_URL`, `paddleocr`→`PADDLEOCR_PARSE_URL`). 기존 PaddleOCR 사용자는 `OCR_ENGINE=paddleocr`를 명시해야 한다.
+- **PaddleOCR → legacy/optional 폴백 강등**: `deploy/docker-compose.yml`에서 paddleocr 서비스를 `profiles: ["legacy-ocr"]`로 이동(기본 `up`에서 제외, `docker compose --profile legacy-ocr up -d paddleocr`로만 기동). app 기본 `OCR_ENGINE=kordoc`, `depends_on`에서 paddleocr 제거. 참조 구현(`deploy/paddleocr-parser`)은 폴백용으로 **유지**.
+- **문서·헬스체크**: `.env.example`(kordoc 기본·PaddleOCR 주석) / `docs/PARSERS.md`·`docs/INSTALL.md`·`README.md`(OCR 기본 kordoc·PaddleOCR legacy) / `check_services.js`(활성 OCR 엔진 기준으로 헬스체크).
+
+### Note
+- kordoc OCR은 별도 `--ocr` 활성 서버가 필요하다(in-process kordoc은 문서 변환 전용). crawl4alio deploy는 kordoc OCR 서버를 제공하지 않으므로 `KORDOC_PARSE_URL`(또는 `OCR_PARSE_URL`)로 외부 서버를 지정한다. 이 전환의 근거: kordoc 내부 OCR ↔ PaddleOCR 품질 A/B 동등(PP-OCRv5 공통) — 엔진 일원화 목적.
+
 ## [1.9.4] - 2026-07-20
 
 ### Added

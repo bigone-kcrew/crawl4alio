@@ -1,14 +1,21 @@
 # crawl4alio 풀스택 (N100급 미니PC 1대 기준)
 #
-# 기동:   cd deploy && docker compose up -d crawl4ai paddleocr
+# 기동:   cd deploy && docker compose up -d crawl4ai        # 페이지 크롤러
 # 상태:   docker compose run --rm app                       # check_services 실행
 # 수집:   docker compose run --rm app npm run sync:alio
 #         docker compose run --rm app npm run collect:legal
 # 변환:   docker compose run --rm app npm run convert:markdown
-#         docker compose run --rm app npm run convert:ocr
+#         docker compose run --rm app npm run convert:ocr    # OCR: 기본 엔진 kordoc
 #
-# 주의: paddleocr 최초 기동 시 모델 다운로드로 첫 요청이 수 분 걸림
-#       (모델은 paddlex-models 볼륨에 영속화되어 재기동 시 즉시 사용)
+# OCR 엔진(기본 kordoc):
+#   기본은 OCR_ENGINE=kordoc — 스캔본 OCR은 kordoc 4.2 --ocr 서버가 필요하다.
+#   crawl4alio는 kordoc 서버를 이 compose로 제공하지 않으므로, .env.api 에
+#   KORDOC_PARSE_URL(또는 OCR_PARSE_URL)로 외부 kordoc --ocr 서버를 지정한다.
+#     예) KORDOC_PARSE_URL=http://<host>:3400/parse
+#   (legacy) PaddleOCR 폴백을 쓰려면 profile 로 기동 후 엔진 전환:
+#     docker compose --profile legacy-ocr up -d crawl4ai paddleocr
+#     OCR_ENGINE=paddleocr (PADDLEOCR_PARSE_URL=http://paddleocr:13430/parse)
+#   ※ paddleocr 최초 기동 시 모델 다운로드로 첫 요청이 수 분(paddlex-models 볼륨 영속화)
 
 services:
   app:
@@ -22,10 +29,11 @@ services:
         required: false
     environment:
       CRAWL4AI_URL: http://crawl4ai:11235/crawl
+      OCR_ENGINE: ${OCR_ENGINE:-kordoc}
+      # kordoc OCR 서버는 외부(.env.api 의 KORDOC_PARSE_URL). legacy paddleocr 전환 시 아래 사용:
       PADDLEOCR_PARSE_URL: http://paddleocr:13430/parse
     depends_on:
       - crawl4ai
-      - paddleocr
 
   crawl4ai:
     image: unclecode/crawl4ai:latest
@@ -34,7 +42,9 @@ services:
       - "11235:11235"
     restart: unless-stopped
 
+  # (legacy/optional) PaddleOCR 폴백 — 기본 기동에서 제외. `--profile legacy-ocr` 로만 기동.
   paddleocr:
+    profiles: ["legacy-ocr"]
     build: ./paddleocr-parser
     ports:
       - "13430:13430"

@@ -155,7 +155,7 @@ node collection/sync_alio.js --mode=apply      # 감지 즉시 수집
 | `KORDOC_PARSE_URL` | kordoc HTTP 서버(미설정 시 npm 내장 사용) |
 | `KORDOC_OCR` | 내장 kordoc(4.2.0+) 텍스트 OCR 스위치. **기본 off** · `1`/`on`=needsOcr 페이지만 · `force`=전 페이지. OCR 워커 머신에서만 켠다 |
 | `MARKITDOWN_PARSE_URL` | markitdown 폴백(선택) |
-| `OCR_ENGINE` | OCR 큐 처리 엔진 라벨: `paddleocr`(기본) / `kordoc`. 메타·체크포인트 parser 표기 |
+| `OCR_ENGINE` | OCR 큐 처리 엔진: `kordoc`(기본, 4.2 `--ocr`) / `paddleocr`(legacy 폴백). 메타·체크포인트 parser 표기 |
 | `OCR_PARSE_URL` | OCR 워커 /parse 엔드포인트(엔진 무관, 응답 계약 동일). 미설정 시 `PADDLEOCR_PARSE_URL` 폴백 |
 | `PADDLEOCR_PARSE_URL` | (하위호환) 외부 PaddleOCR 엔드포인트. `OCR_PARSE_URL` 우선 |
 | `OPENAPILAWKEY` / `LAW_OC` | law.go.kr Open API 이용자 ID |

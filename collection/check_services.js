@@ -47,9 +47,17 @@ async function main() {
         console.log('❌ kordoc: 사용 불가 — npm install을 실행하세요');
     }
 
-    // 3. PaddleOCR (스캔 PDF)
-    const ocrHealth = await probe(PADDLEOCR_URL.replace(/\/parse$/, '/health'));
-    console.log(`${mark(ocrHealth.reachable)} PaddleOCR: ${PADDLEOCR_URL} ${ocrHealth.reachable ? '(도달 가능)' : `(도달 불가: ${ocrHealth.error})`}`);
+    // 3. OCR 엔진 (스캔 PDF) — 기본 kordoc(4.2 --ocr 서버), legacy paddleocr
+    const ocrEngine = (process.env.OCR_ENGINE || 'kordoc').trim().toLowerCase();
+    const ocrUrl = process.env.OCR_PARSE_URL
+        || (ocrEngine === 'kordoc' ? (process.env.KORDOC_PARSE_URL || process.env.KORDOC_URL || '') : PADDLEOCR_URL);
+    if (ocrUrl) {
+        const ocrHealth = await probe(ocrUrl.replace(/\/parse$/, '/health'));
+        console.log(`${mark(ocrHealth.reachable)} OCR(${ocrEngine}): ${ocrUrl} ${ocrHealth.reachable ? '(도달 가능)' : `(도달 불가: ${ocrHealth.error})`}`);
+    } else {
+        const need = ocrEngine === 'kordoc' ? 'KORDOC_PARSE_URL' : 'PADDLEOCR_PARSE_URL';
+        console.log(`⚠️  OCR(${ocrEngine}): 서버 URL 미설정 — ${need} 지정 필요(스캔본 OCR 시)`);
+    }
 
     // 4. Crawl4AI (ALIO 본문 표)
     const crawlHealth = await probe(CRAWL4AI_URL.replace(/\/crawl$/, '/health'));

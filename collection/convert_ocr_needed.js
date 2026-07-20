@@ -254,14 +254,14 @@ function buildMarkdown(markdownContent, meta, parseUrl) {
     year:          String(meta.year),
     source_url:    meta.source_url || '',
     original_file: meta.original_file,
-    ocr_service:   global.__OCR_ENGINE || 'paddleocr',
+    ocr_service:   global.__OCR_ENGINE || 'kordoc',
     ocr_endpoint:  parseUrl,
     converted_at:  new Date().toISOString(),
     source_ext:    'pdf',
   }, { lineWidth: -1 });
 
   const body = markdownContent.trim();
-  const engine = global.__OCR_ENGINE || 'paddleocr';
+  const engine = global.__OCR_ENGINE || 'kordoc';
   return `---\n${fm}---\n\n${body}\n\n<!-- source: ${meta.original_file} -->\n<!-- ocr: ${engine} -->\n`;
 }
 
@@ -306,14 +306,18 @@ async function main() {
   if (envFile) console.log(`[ENV] ${envFile}`);
 
   // OCR 엔진 선택 — HTTP 응답 계약({result:{markdown}} 또는 문자열)이 동일하므로
-  // 호출부는 엔진 무관. paddleocr(기본, 하위호환) / kordoc(4.2 --ocr 서버) 라벨·URL만 분기.
-  //   OCR_ENGINE=kordoc OCR_PARSE_URL=http://n100:3400/parse
-  const OCR_ENGINE = (process.env.OCR_ENGINE || 'paddleocr').trim().toLowerCase();
-  const parseUrl = process.env.OCR_PARSE_URL
-    || process.env.PADDLEOCR_PARSE_URL
+  // 호출부는 엔진 무관. kordoc(기본, 4.2 --ocr 서버) / paddleocr(legacy 폴백) 라벨·URL만 분기.
+  //   기본: OCR_ENGINE=kordoc, KORDOC_PARSE_URL=http://<kordoc --ocr 서버>:3400/parse
+  //   폴백: OCR_ENGINE=paddleocr, PADDLEOCR_PARSE_URL=http://localhost:13430/parse
+  const OCR_ENGINE = (process.env.OCR_ENGINE || 'kordoc').trim().toLowerCase();
+  const kordocUrl = process.env.KORDOC_PARSE_URL || process.env.KORDOC_URL || '';
+  const paddleUrl = process.env.PADDLEOCR_PARSE_URL
     || (process.env.PADDLEOCR_BASE_URL ? process.env.PADDLEOCR_BASE_URL.replace(/\/$/, '') + '/parse' : '');
+  // OCR_PARSE_URL(명시)이 최우선, 없으면 엔진별 기본 URL.
+  const parseUrl = process.env.OCR_PARSE_URL || (OCR_ENGINE === 'kordoc' ? kordocUrl : paddleUrl);
   if (!parseUrl) {
-    throw new Error('OCR_PARSE_URL / PADDLEOCR_PARSE_URL / PADDLEOCR_BASE_URL 중 하나가 필요합니다.');
+    const need = OCR_ENGINE === 'kordoc' ? 'KORDOC_PARSE_URL' : 'PADDLEOCR_PARSE_URL';
+    throw new Error(`OCR_PARSE_URL 또는 ${need} 가 필요합니다 (OCR_ENGINE=${OCR_ENGINE}).`);
   }
   console.log(`[OCR] engine=${OCR_ENGINE} ${parseUrl}`);
   global.__OCR_ENGINE = OCR_ENGINE; // buildMarkdown·체크포인트 라벨에서 참조
@@ -648,7 +652,7 @@ async function main() {
 
     ocrCkpt.files[item.id] = {
       status: 'success',
-      parser: global.__OCR_ENGINE || 'paddleocr',
+      parser: global.__OCR_ENGINE || 'kordoc',
       output: outputPath,
       ...(fileHash ? { pdf_hash: fileHash } : {}),
       processed_at: new Date().toISOString(),
