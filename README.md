@@ -36,8 +36,9 @@
 ## ✨ 기능
 
 - **ALIO 경영공시 수집** — 355개 기관 × 92개 공시항목(정기/수시 자동 구분). 항목(`--scope`/`--categories`/`--items`)·기관(`--ministry`/`--apba-ids`/`--inst-type`)을 자유 선택. 본문 없는 문서첨부형은 `--attach-only-items`로 크롤러를 건너뛰어 대폭 가속.
-- **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 전담: 국회 지적(B1210)·감사원 지적(B1220)은 본문+첨부, 경영평가결과(B1230/B1250)는 첨부, 채용공고(B1010/B1020)는 게시글+첨부 전량(posting 체크포인트·병렬).
+- **게시판형 공시 수집** — 일반 다운로더가 스킵하는 게시판형(disclosureNo 없음) 전담. 국회/감사원 지적(B1210/B1220)은 본문+첨부, 경영평가·고객만족도·복리후생·환경(B1230/B1250/B1240/B1280/B1270)은 첨부, 채용공고(B1010/B1020)는 게시글+첨부 전량(posting 체크포인트·병렬). 페이지별 JSON API(`download.json`/`pfile.json`)를 리버싱해 대응.
 - **증분 동기화** — 저장본과 웹 최신본을 대조해 신규·누락만 수집(`sync_alio.js`/`sync_legal.js`). report 체크포인트로 **원본(raw)을 오프사이트로 옮겨 삭제한 뒤에도** 증분 가능.
+- **증분 자동화 (n8n · 선택)** — 스케줄 감지 → 텔레그램 알림·버튼 승인 → 수집·적재 → 완료 통지. **수시(채용, 주간)·월간(규정·이사회·임원, 월 1회)·정기(분기)** 트랙을 HTTP 래퍼(`n8n/periodic_server.js`)로 호출. RAG 편입은 **델타**(`parse_disclosure --under/--since` + `load_pg --delta`)로 신규·변경분만 재적재 ([n8n/README.md](n8n/README.md)).
 - **법령·행정규칙 수집** — law.go.kr Open API(DRF)로 본문+별표·서식 구조화 수집, 검색 기반 추가, ALIO 법령/지침 게시판(기재부 지침 개정 이력) 수집.
 - **기관 내부규정 수집** — ALIO 게시판에서 최신본 또는 개정 이력 전체(`--all-files`).
 - **Markdown 변환 파이프라인** — HWP/PDF/XLSX/DOCX를 **kordoc**으로 변환. 스캔본 OCR도 **kordoc 4.2**(기본)이며 markitdown·PaddleOCR은 선택/legacy 폴백. ZIP 자동 해제, 스캔 PDF 품질 게이트, raw/md 트리 분리 출력.
@@ -49,18 +50,7 @@
 
 ## 🏗 아키텍처
 
-```mermaid
-flowchart TB
-    A["수집 — ALIO · 법령 · 내규"] --> R["원본 첨부 (raw)"]
-    R --> K["kordoc 변환"]
-    K -->|"텍스트 추출 성공"| M["기관별 Markdown (md)"]
-    K -->|"스캔 · 추출 실패"| Q["ocr_needed 큐"]
-    Q -->|"텍스트 PDF → kordoc 회수"| M
-    Q -->|"진짜 스캔 → kordoc OCR(4.2)"| M
-    M --> S["검색 · RAG · 증분 동기화"]
-```
-
-> 파서 폴백(markitdown)·수집 경로별 상세는 아래 표 참고.
+**흐름**: 수집(ALIO·법령·내규) → 원본 첨부(raw) → **kordoc 변환** → 기관별 Markdown(md) → 검색·RAG·증분. 텍스트 추출 실패분만 `ocr_needed` 큐로 넘겨 **kordoc `--ocr`(진짜 스캔)** 또는 **kordoc 회수(오분류 텍스트 PDF)** 로 처리.
 
 **수집 계층** — 목록(카탈로그) → 크롤러:
 
@@ -69,7 +59,7 @@ flowchart TB
 | ① 목록 | `fetch_disclosure_catalog.js` | 공시항목 92종(정기/수시) | formList API |
 | | `data/institutions.json` | 공공기관 355개 | 정적 시드(갱신 수집기 미구현 — 알려진 갭) |
 | ② 크롤러형 | `download_documents_advanced.js` | disclosureNo 있는 일반공시 | 상세페이지 Crawl4AI + 첨부 HTTP |
-| ③ 게시판형 | `collect_board_disclosures.js` | B1210/B1220(본문+첨부)·B1230/B1250(첨부) | 게시판 API + fileNo |
+| ③ 게시판형 | `collect_board_disclosures.js` | B1210/B1220 지적·B1230/B1250 경영평가·B1240 고객만족도·B1280 복리후생·B1270 환경 | 게시판 API + fileNo/pfile |
 | | `collect_recruit_attachments.js` | B1010/B1020 채용공고 | 병렬 + posting 체크포인트 |
 | | `collect_institution_bylaws.js` | 기관 내부규정 | 게시판 + 최신본/전체 |
 | ④ 별도 소스 | `collect_legal_corpus.js` / `sync_legal.js` | 법령·행정규칙 | law.go.kr DRF API |
@@ -207,6 +197,7 @@ crawl4alio/
 │   └── project/crawler/                 # 크롤러 설정(yaml)·공용 유틸(parsers·paths 등)
 ├── postprocess/                    # OCR 후처리 — 조문 구조 감사·복원 5종 (docs/POSTPROCESS.md)
 ├── rag/                            # RAG 확장 — 조항 검색·임베딩·API·MCP (rag/README.md)
+├── n8n/                            # 증분 자동화 — 감지·승인·통지·월간 워크플로 + HTTP 래퍼 (n8n/README.md)
 ├── scripts/                        # 무인 운영 감독 (§CONVERSION 3-2)
 │   ├── ocr_watchdog.sh                  # 인스턴스 사망·정체 재기동
 │   ├── ocr_rebalance.sh                 # 밴드 동적 재배분(SPLIT 상향)
@@ -250,6 +241,7 @@ crawl4alio/
 - [docs/PARSERS.md](docs/PARSERS.md) — 파서 `/parse` 계약(직접 연결용)
 - [docs/POSTPROCESS.md](docs/POSTPROCESS.md) — OCR 후처리(조문 구조 정리)
 - [rag/README.md](rag/README.md) — RAG 확장 모듈
+- [n8n/README.md](n8n/README.md) — 증분 자동화(감지·승인·통지) 워크플로
 - [CHANGELOG.md](CHANGELOG.md) — 버전별 변경 이력
 
 <a name="기수집-데이터-문의"></a>
