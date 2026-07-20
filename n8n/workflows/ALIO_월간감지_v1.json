@@ -1,0 +1,86 @@
+{
+  "name": "ALIO 월간감지 v1",
+  "nodes": [
+    {
+      "id": "s",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 15 * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "al",
+      "name": "ANDY 월간알림",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "🗓️ [ALIO] 월간 참조자료 갱신 시점 — 규정원문·이사회·임원·내규공시. 수집할까요?",
+        "additionalFields": {},
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ 수집",
+                    "additionalFields": {
+                      "callback_data": "alio:approve:monthly"
+                    }
+                  },
+                  {
+                    "text": "⏭ 건너뛰기",
+                    "additionalFields": {
+                      "callback_data": "alio:skip:monthly"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "95a629d1-c75a-4cda-b064-bddfc378878c"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "ANDY 월간알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Seoul"
+  }
+}

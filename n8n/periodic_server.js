@@ -19,7 +19,7 @@ const ALIO = '/workspace/alio';
 const PORT = Number(process.env.PIPELINE_PORT || 8092);
 const TOKEN = (process.env.PIPELINE_TOKEN || '').trim();
 const DONE_HOOK = (process.env.N8N_DONE_WEBHOOK || '').trim();  // http 웹훅(선택)
-const TRACKS = ['detect', 'recruit', 'quarterly', 'annual'];
+const TRACKS = ['detect', 'recruit', 'monthly', 'quarterly', 'annual'];
 let running = null;   // {track, apply, since}
 
 const digest = t => { try { return JSON.parse(fs.readFileSync(`${ALIO}/_ops/logs/periodic_${t}.summary.json`, 'utf8')); } catch { return null; } };

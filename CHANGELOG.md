@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.8] - 2026-07-21
+
+### Added
+- **n8n 월간(monthly) 트랙**: 참조성 수시(규정원문·이사회·임원·내규공시)를 월 1회 배치. `n8n/periodic_server.js` TRACKS에 `monthly` 등록, `n8n/workflows/ALIO_월간감지_v1.json`(매월 15일 09시 KST, 새니타이즈) 추가, `n8n/README.md`에 트랙(recruit/monthly/quarterly/detect) 설명·크론 예시 반영. 시간민감 자료(채용)는 주간, 볼륨 크고 시간민감 낮은 참조자료(규정 ~월1000건 등)는 월간으로 분리.
+
 ## [1.9.7] - 2026-07-20
 
 ### Added
