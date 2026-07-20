@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.7] - 2026-07-20
+
+### Added
+- **게시판형 수집 사각지대 5종 추가** (`collection/collect_board_disclosures.js`): 커버리지 전수 감사(라이브 프로브)로 "첨부가 있는데 어느 수집기도 못 받던" 항목 확인 → `FORM_CONFIG`에 등재. **B1240 고객만족도**(COMM, 25/25기관), **B1260·B1040 연구보고서**(COMM), **B1280 그밖의 복리후생 운영현황**(COMM, ⚠️표준다운로더가 페이지만 처리 → 첨부 누락분), **B1270 환경보호 위반·조치**(PTOT). 기존 COMM/PTOT 핸들러가 그대로 동작(엔드포인트·파일명 실측 확인).
+- 게시판형 첨부는 `itemBoardBxxxx.do`의 `download.json?fileNo=`(COMM)·`downAttachFile→pfile.json`(PTOT)로만 노출되어 표준 다운로더(`download_documents_advanced.js`)로는 회수 불가 — board 수집기 계열만 가능.
+
+### Fixed
+- **기본 forms를 `Object.keys(FORM_CONFIG)`로 변경**: 기존엔 기본값이 `['B1210','B1220','B1230','B1250']` 하드코딩이라 **B1250이 정의됐어도 과거 실행에서 누락**되던 문제(정의만 되고 미실행)를 구조적으로 방지 — 이제 정의된 전 폼이 기본 대상.
+
 ## [1.9.6] - 2026-07-20
 
 ### Added

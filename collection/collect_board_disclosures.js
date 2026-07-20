@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * 게시판형 공시 수집 — 국회/감사원 지적사항(B1210/B1220), 경영평가(B1230/B1250)
+ * 게시판형 공시 수집 — 국회/감사원 지적(B1210/B1220), 경영평가(B1230/B1250),
+ *   고객만족도(B1240), 연구보고서(B1260/B1040), 복리후생 운영현황(B1280), 환경보호 위반·조치(B1270)
  *
- * 일반 다운로더(download_documents_advanced.js)는 게시판형(disclosureNo 없음)을 스킵하고,
+ * 일반 다운로더(download_documents_advanced.js)는 게시판형 첨부(download.json/pfile.json)를 못 가져오고,
  * 채용 수집기(collect_recruit_attachments.js)는 채용 게시판(B1010/B1020) 전용이라,
- * 이 4개 항목은 어느 수집기로도 안 잡히던 사각지대. 이 스크립트가 담당.
+ * 이 항목들은 어느 수집기로도 안 잡히던 사각지대. 이 스크립트가 담당.
+ * (2026-07-20 커버리지 감사: B1240·B1260·B1040·B1280·B1270 추가, B1250은 정의됐으나 미실행이던 것 기본 포함.)
  *
  * 유형별 첨부/본문 방식 (라이브 실측 확정):
  *  - PTOT(B1210/B1220): 본문이 페이지 인라인 텍스트(지적사항/시정조치 계획·결과).
@@ -36,6 +38,13 @@ const FORM_CONFIG = {
     B1220: { detailPath: '/item/itemBoardB1220.do', kind: 'PTOT', folder: 'B1220_감사원등지적사항' },
     B1230: { detailPath: '/item/itemBoardB1230.do', kind: 'COMM', folder: 'B1230_경영평가결과' },
     B1250: { detailPath: '/item/itemBoardB1250.do', kind: 'COMM', folder: 'B1250_경영평가결과' },
+    // 2026-07-20 커버리지 감사로 추가된 게시판형 사각지대(첨부 실측 확인)
+    B1240: { detailPath: '/item/itemBoardB1240.do', kind: 'COMM', folder: 'B1240_고객만족도' },
+    B1260: { detailPath: '/item/itemBoardB1260.do', kind: 'COMM', folder: 'B1260_연구보고서' },
+    B1040: { detailPath: '/item/itemBoardB1040.do', kind: 'COMM', folder: 'B1040_연구보고서' },
+    // ⚠️ B1280: 표준 다운로더가 페이지(disclosureNo)를 이미 처리 → 수집 시 중복 폴더/메타 충돌 점검 필요
+    B1280: { detailPath: '/item/itemBoardB1280.do', kind: 'COMM', folder: 'B1280_복리후생운영현황' },
+    B1270: { detailPath: '/item/itemBoardB1270.do', kind: 'PTOT', folder: 'B1270_환경보호' },
 };
 
 const logger = {
@@ -72,7 +81,7 @@ function truncateBytes(str, maxBytes) {
 }
 
 function parseArgs(argv) {
-    const args = { forms: ['B1210', 'B1220', 'B1230', 'B1250'], years: 3, apba: null, limit: 0,
+    const args = { forms: Object.keys(FORM_CONFIG), years: 3, apba: null, limit: 0,   // 기본=정의된 전 폼(미실행 사각 방지)
         out: fromStructuredRoot(), dryRun: false };
     for (let i = 2; i < argv.length; i += 1) {
         const take = () => argv[++i];

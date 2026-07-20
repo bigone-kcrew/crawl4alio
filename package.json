@@ -1,6 +1,6 @@
 {
   "name": "crawl4alio",
-  "version": "1.9.6",
+  "version": "1.9.7",
   "description": "ALIO(공공기관 경영정보 공개시스템)·국가법령정보(law.go.kr)·기관 내규 수집 및 Markdown 변환 도구",
   "license": "MIT",
   "engines": {
