@@ -4,8 +4,12 @@
 
 ## [1.9.4] - 2026-07-20
 
+### Added
+- **표 인식 청킹 (`rag/parse_disclosure.js`)**: RAG 청킹이 표를 문자 단위로 잘라 구조를 파괴하던 문제 해결. **markdown `|`표 + HTML `<table>`**(kordoc 4.2가 직무기술서 등에서 출력) 모두 평탄화 전에 분리해 **행 경계로 분할하고, target 초과 시 헤더 행을 반복**한다. HTML은 `<tr>`=행·`<th>/<td>`=셀(이중공백 구분)·`<br>`→공백으로 파싱. `cleanLine`은 **ASCII HTML 태그만** 제거(`<\/?[a-zA-Z][^>]*>`)해 `<경영목표>` 등 한글 꺾쇠 마커는 보존. 긴 일반 문단도 char→단어 경계 분할. 헬퍼 `isHtmlTableStart`/`htmlTableRows`/`mdTableRows`/`chunkRows` 공용화.
+
 ### Changed
 - **structured_data 심링크 은퇴 → `DATA_ROOT` env + `fromStructuredRoot()`**: 구조화 코퍼스 트리 기준을 심링크(structured_data)가 아니라 실경로로 직접 지정. `fromCatalogRoot("structured_data")` 11개 호출부를 `fromStructuredRoot()`로 중앙화(paths.js). 미지정 시 catalogRoot/structured_data 하위호환. 프로덕션: `DATA_ROOT=<...>/alio-md/자료/기관별공시`. alio측 체크포인트(conversion 135,503+ocr 18,371 경로)·코드 동반 치환, 심링크 2개 제거. 런타임·경로해석 검증 완료.
+- **청크 크기 파라미터 (`rag/parse_disclosure.js`)**: `CHUNK_CAP` 40→120(표 많은 공고 등 정형 대형문서의 조기 truncate 방지) + 적응형 target 산정 분모를 `TARGET_DIV=40`으로 분리(cap 변경이 청크 크기에 영향 없음), 청크 상한 `TARGET_MAX` 4000→2500(과대 청크의 임베딩 의미 희석 완화·검색 정밀도↑). 비(非)표·소형 문서 출력 무변화(회귀 검증).
 
 ## [1.9.3] - 2026-07-18
 

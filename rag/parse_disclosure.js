@@ -19,7 +19,9 @@ const ROOT = process.env.RAG_ROOT ? path.join(process.env.RAG_ROOT, '2_data') : 
 const OUT = path.join(ROOT, '_rag_staging');
 const BASE = path.join(ROOT, 'alio-md', '자료', '기관별공시');
 
-const CHUNK_CAP = 40;           // 문서당 최대 청크(거대 OCR 덤프 방어)
+const CHUNK_CAP = 120;          // 문서당 최대 청크(거대 OCR 덤프 방어). 정형 대형문서(표 많은 공고 등) 손실 방지 위해 40→120
+const TARGET_DIV = 40;          // 적응형 target 산정 분모(청크≈내용/TARGET_DIV). CHUNK_CAP과 분리 — cap 변경이 청크 크기에 영향 안 주게
+const TARGET_MAX = 2500;        // 청크 상한(4000→2500). 과대 청크의 임베딩 의미 희석 완화(검색 정밀도↑)
 const MIN_CHUNK_CHARS = 40;     // 이보다 짧거나 글자 없으면 스킵
 const OVERLAP = 120;
 
@@ -56,6 +58,7 @@ function cleanLine(raw) {
   if (/^\s*\|.*\|\s*$/.test(s)) s = s.replace(/\|/g, '  ');        // 표 데이터행 → 셀 텍스트
   s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');                  // [t](url) → t
   s = s.replace(/\*\*?/g, '').replace(/^\s*#{1,6}\s*/, '');       // 굵게/헤딩 표식 제거
+  s = s.replace(/<br\s*\/?>/gi, ' ').replace(/<\/?[a-zA-Z][^>]*>/g, '');
   s = s.replace(/[\u3000\u00a0]/g, ' ').replace(/\s+$/, '');
   return s;
 }
@@ -64,54 +67,146 @@ function meaningful(t) {
   return t.length >= MIN_CHUNK_CHARS && /[가-힣A-Za-z]/.test(t);
 }
 
-// 정리된 텍스트를 문단 누적 방식으로 청킹(적응형 크기·오버랩·상한)
-function chunkDoc(rawLines) {
-  const cleaned = [];
-  for (const l of rawLines) {
-    const c = cleanLine(l);
-    if (c === null) continue;
-    cleaned.push(c);
+const isTableRow = l => /^\s*\|.*\|\s*$/.test(l);
+const isTableSep = l => /^\s*\|?[\s:|]*-{2,}[\s:|-]*\|?\s*$/.test(l);
+const isHtmlTableStart = l => /<table[\s>]/i.test(l);
+
+// 표 행을 검색용 텍스트로(셀 구분=이중공백), 링크/굵게 제거
+function cleanTableRow(raw) {
+  let s = raw.trim().replace(/^\|/, '').replace(/\|$/, '');
+  s = s.split('|').map(c => c.trim()).join('  ');
+  s = s.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*?/g, '');
+  return s.replace(/[　 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// 정리된 행들(0=헤더)을 행 경계로 분할(넘치면 헤더 반복, char 중간 절단 없음)
+function chunkRows(rows, target) {
+  rows = rows.filter(Boolean);
+  if (!rows.length) return [];
+  const header = rows[0], data = rows.slice(1);
+  if (data.length === 0) return meaningful(header) ? [header] : [];
+  const out = [];
+  let cur = [header], len = header.length;
+  for (const row of data) {
+    if (len + row.length + 1 > target && cur.length > 1) {
+      out.push(cur.join('\n'));
+      cur = [header, row]; len = header.length + row.length + 1;
+    } else { cur.push(row); len += row.length + 1; }
   }
-  const text = cleaned.join('\n');
-  const paras = text.split(/\n{2,}/)
-    .map(p => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
-  const contentChars = paras.reduce((s, p) => s + p.length, 0);
+  if (cur.length > 1) out.push(cur.join('\n'));
+  return out;
+}
+
+// markdown |표| 원행 → 정리 행 배열
+function mdTableRows(rows) {
+  const out = [];
+  for (const r of rows) { if (isTableSep(r)) continue; const c = cleanTableRow(r); if (c) out.push(c); }
+  return out;
+}
+
+// HTML <table> 블록텍스트 → 정리 행 배열(<tr>=행, <th>/<td> 셀, <br>→공백, 태그 제거)
+function htmlTableRows(blockText) {
+  const out = [];
+  for (const m of blockText.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...m[1].matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi)].map(c =>
+      c[1].replace(/<br\s*\/?>/gi, ' ').replace(/<\/?[a-zA-Z][^>]*>/g, '')
+          .replace(/[　 ]/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const line = cells.join('  ').trim();
+    if (line) out.push(line);
+  }
+  return out;
+}
+
+// 긴 문단을 단어 경계로 분할(char 중간 절단 방지)
+function splitByWords(p, target) {
+  const out = [];
+  let cur = '';
+  for (const w of p.split(' ')) {
+    if (cur && cur.length + 1 + w.length > target) { out.push(cur); cur = ''; }
+    cur += (cur ? ' ' : '') + w;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+// 문단 누적 청킹(적응형 크기·오버랩·상한). 표(연속 |행| 2줄↑)는 평탄화 전에 분리해
+// 행 경계로 분할 — 표 중간 절단 방지. 비(非)표 문서는 기존과 동일 동작.
+function chunkDoc(rawLines) {
+  // 1) 원문 기준 표(markdown/HTML)/텍스트 블록 분절(표 구조 살아있는 상태에서)
+  const seq = [];             // {type:'rows',rows:[정리행]} | {type:'text',paras}
+  let contentChars = 0;
+  const addText = (buf) => {
+    const cleaned = [];
+    for (const l of buf) { const c = cleanLine(l); if (c !== null) cleaned.push(c); }
+    const paras = cleaned.join('\n').split(/\n{2,}/)
+      .map(p => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    contentChars += paras.reduce((s, p) => s + p.length, 0);
+    seq.push({ type: 'text', paras });
+  };
+  const addRows = (rows) => {
+    rows = rows.filter(Boolean);
+    if (!rows.length) return;
+    contentChars += rows.reduce((s, r) => s + r.length, 0);
+    seq.push({ type: 'rows', rows });
+  };
+  for (let i = 0; i < rawLines.length; ) {
+    if (isHtmlTableStart(rawLines[i])) {                 // HTML <table> 블록
+      const buf = [];
+      while (i < rawLines.length) { const end = /<\/table>/i.test(rawLines[i]); buf.push(rawLines[i++]); if (end) break; }
+      const rows = htmlTableRows(buf.join('\n'));
+      if (rows.length) addRows(rows); else addText(buf);
+      continue;
+    }
+    if (isTableRow(rawLines[i])) {                        // markdown |표| 블록(2줄↑)
+      const raw = [];
+      while (i < rawLines.length && isTableRow(rawLines[i])) raw.push(rawLines[i++]);
+      if (raw.length >= 2) { addRows(mdTableRows(raw)); continue; }
+      i -= raw.length;                                    // 단일 |행| → 텍스트
+    }
+    const buf = [];                                       // 텍스트 블록(다음 표 시작 전까지)
+    while (i < rawLines.length
+           && !isHtmlTableStart(rawLines[i])
+           && !(isTableRow(rawLines[i]) && i + 1 < rawLines.length && isTableRow(rawLines[i + 1]))) buf.push(rawLines[i++]);
+    addText(buf);
+  }
   if (contentChars === 0) return { chunks: [], contentChars: 0, truncated: false };
 
-  const target = Math.max(1000, Math.min(4000, Math.round(contentChars / CHUNK_CAP)));
+  const target = Math.max(1000, Math.min(TARGET_MAX, Math.round(contentChars / TARGET_DIV)));
   const chunks = [];
   let cur = '';
   let truncated = false;
+  const capHit = () => chunks.length >= CHUNK_CAP;
+  const push = () => { const t = cur.trim(); if (meaningful(t)) chunks.push(t); cur = ''; };
 
-  const push = () => {
-    const t = cur.trim();
-    if (meaningful(t)) chunks.push(t);
-    cur = '';
-  };
-
-  for (let pi = 0; pi < paras.length; pi++) {
-    let p = paras[pi];
-    // 한 문단이 target보다 크면 하드 분할
-    if (p.length > target) {
-      if (cur) { push(); if (chunks.length >= CHUNK_CAP) { truncated = pi < paras.length; break; } }
-      for (let i = 0; i < p.length; i += target) {
-        if (chunks.length >= CHUNK_CAP) { truncated = true; break; }
-        const piece = p.slice(i, i + target).trim();
-        if (meaningful(piece)) chunks.push(piece);
+  outer:
+  for (const s of seq) {
+    if (s.type === 'rows') {                           // 표(markdown·HTML) → 행 경계 분할
+      if (cur) { push(); if (capHit()) { truncated = true; break; } }
+      for (const tc of chunkRows(s.rows, target)) {
+        if (capHit()) { truncated = true; break outer; }
+        if (meaningful(tc)) chunks.push(tc);
       }
-      if (chunks.length >= CHUNK_CAP && (pi < paras.length - 1)) { truncated = true; break; }
       continue;
     }
-    if (cur && cur.length + 1 + p.length > target) {
-      const prev = cur;
-      push();
-      if (chunks.length >= CHUNK_CAP) { truncated = pi < paras.length; break; }
-      cur = prev.slice(-OVERLAP) + ' ';   // 오버랩
+    for (const p of s.paras) {
+      if (p.length > target) {                       // 긴 문단 → 단어 경계 분할
+        if (cur) { push(); if (capHit()) { truncated = true; break outer; } }
+        for (const piece of splitByWords(p, target)) {
+          if (capHit()) { truncated = true; break outer; }
+          if (meaningful(piece)) chunks.push(piece);
+        }
+        continue;
+      }
+      if (cur && cur.length + 1 + p.length > target) {
+        const prev = cur;
+        push();
+        if (capHit()) { truncated = true; break outer; }
+        cur = prev.slice(-OVERLAP) + ' ';            // 오버랩
+      }
+      cur += (cur ? ' ' : '') + p;
     }
-    cur += (cur ? ' ' : '') + p;
   }
-  if (chunks.length < CHUNK_CAP) push();
+  if (!capHit()) push();
 
   return { chunks, contentChars, truncated };
 }
