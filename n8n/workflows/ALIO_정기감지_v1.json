@@ -1,0 +1,234 @@
+{
+  "name": "ALIO 정기감지 v1",
+  "nodes": [
+    {
+      "id": "s",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 1 5,8,11,2 *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "h",
+      "name": "Detect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://<PIPELINE_HOST>:8092/periodic/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"track\":\"detect\"}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CRED_ID>",
+          "name": "ALIO Pipeline Token"
+        }
+      }
+    },
+    {
+      "id": "ok",
+      "name": "detect 성공?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.ok}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "nw",
+      "name": "신규 있나",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -80
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.digest.missing}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "al",
+      "name": "ANDY 감지알림",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        -140
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=[ALIO] 🔔 정기공시 증분 감지 - 신규 {{$json.digest.missing}}건 (실패 {{$json.digest.failed}} / OCR {{$json.digest.ocr_needed}})\n{{ ($json.digest.items||[]).slice(0,10).map(i=>`• [${i.code}] ${i.inst} - ${i.title}`).join(String.fromCharCode(10)) }}{{ $json.digest.ocr_needed>0 ? String.fromCharCode(10)+\"⚠ 미OCR 스캔본 \"+$json.digest.ocr_needed+\"건 — 정기 재적재 시 OCR 워커 가동 권장\" : \"\" }}\n\n수집 승인?",
+        "additionalFields": {},
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ 수집",
+                    "additionalFields": {
+                      "callback_data": "alio:approve:quarterly"
+                    }
+                  },
+                  {
+                    "text": "⏭ 건너뛰기",
+                    "additionalFields": {
+                      "callback_data": "alio:skip:quarterly"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "30001a9d-bf25-4ed5-8ed2-1d227bd9fd6a"
+    },
+    {
+      "id": "er",
+      "name": "ANDY 오류알림",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        720,
+        120
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=[ALIO] ⚠ 정기공시 감지 실패 (exit {{$json.exit}})\n{{ ($json.tail||\"\").slice(-400) }}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "b48b7037-d131-4f3e-b5a8-0c46df0450c4"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Detect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect": {
+      "main": [
+        [
+          {
+            "node": "detect 성공?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "detect 성공?": {
+      "main": [
+        [
+          {
+            "node": "신규 있나",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ANDY 오류알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "신규 있나": {
+      "main": [
+        [
+          {
+            "node": "ANDY 감지알림",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Seoul"
+  }
+}

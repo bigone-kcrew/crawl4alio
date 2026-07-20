@@ -681,6 +681,16 @@ async function main() {
   console.log(`OCR 체크포인트: ${OCR_CKPT_PATH}`);
 }
 
+// standalone 병합 모드: --merge-ckpt <path> — 샤드 OCR ckpt를 메인에 병합만 하고 종료.
+// 듀얼 워커 래퍼(run_ocr_workers.sh)가 --skip-main-merge 샤드 완료 후 각 ckpt를 병합할 때 사용.
+const MERGE_IDX = process.argv.indexOf('--merge-ckpt');
+if (MERGE_IDX !== -1) {
+  const p = process.argv[MERGE_IDX + 1];
+  if (!p) { console.error('[FATAL] --merge-ckpt <path> 필요'); process.exit(2); }
+  try { mergeToMainCheckpoint(JSON.parse(fs.readFileSync(p, 'utf8'))); process.exit(0); }
+  catch (e) { console.error('[FATAL] 병합 실패:', e.message); process.exit(1); }
+}
+
 main().catch(err => {
   console.error('[FATAL]', err.message || err);
   process.exit(1);

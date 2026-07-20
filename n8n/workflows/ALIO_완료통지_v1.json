@@ -1,0 +1,81 @@
+{
+  "name": "ALIO 완료통지 v1",
+  "nodes": [
+    {
+      "id": "w",
+      "name": "완료 수신(webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alio-done",
+        "responseMode": "onReceived"
+      },
+      "webhookId": "alio-done"
+    },
+    {
+      "id": "c",
+      "name": "메시지 구성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const b=$json.body||$json;const ok=b.ok;const track=b.track||\"?\";const exit=b.exit;const dg=b.digest||{};const tail=String(b.tail||\"\").slice(-500);const msg=ok?`[ALIO] \\u2705 ${track} 완료 \\u2014 실패 ${dg.failed??\"?\"}\\u00b7OCR ${dg.ocr_needed??\"?\"}\\u00b7신규 ${dg.missing??\"?\"}`:`[ALIO] \\u26a0\\ufe0f ${track} 실패 (exit ${exit})\\n${tail}`;return [{json:{msg}}];"
+      }
+    },
+    {
+      "id": "t",
+      "name": "ANDY 통지",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        520,
+        0
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "={{$json.msg}}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "02b05c37-d8ac-4f94-a4b3-feac6d321629"
+    }
+  ],
+  "connections": {
+    "완료 수신(webhook)": {
+      "main": [
+        [
+          {
+            "node": "메시지 구성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "메시지 구성": {
+      "main": [
+        [
+          {
+            "node": "ANDY 통지",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

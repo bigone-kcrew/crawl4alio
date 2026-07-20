@@ -199,9 +199,82 @@ async function appendCorpus(co) {
   await c.end();
 }
 
+// ── delta 모드: 스테이징에 있는 doc_id만 정확히 교체(다른 문서 불가침) ─────────
+//   수시 증분(recruit) 전용. parse_disclosure --under <cat> --since <ms> --out <dir> 부분 스테이징을 받아
+//   그 doc_id들만 삭제→재삽입 + 신규 해시만 embed_queue. append(전체 코퍼스 교체)와 달리 범위 한정.
+async function appendCorpusDelta(co, stagingDir) {
+  const dir = stagingDir || STAGING;
+  const dry = process.argv.includes('--dry-run');
+  const ids = [];
+  for await (const d of jsonlLines(path.join(dir, `docs_${co}.jsonl`))) ids.push(d.doc_id);
+  if (!ids.length) { console.log(`delta(${co}): 스테이징 문서 0건 — 변경 없음`); return; }
+  const bad = ids.filter(id => !String(id).startsWith(co + ':'));
+  if (bad.length) throw new Error(`delta(${co}): 접두 불일치 ${bad.length}건 — 중단(예: ${bad[0]})`);
+  console.log(`delta(${co}): 대상 문서 ${ids.length}건${dry ? ' [DRY-RUN]' : ''}`);
+
+  const env = loadEnv();
+  const c = new Client({ host: env.PGHOST || 'postgres', port: +(env.PGPORT || 5432),
+    user: env.POSTGRES_USER, password: env.POSTGRES_PASSWORD, database: 'alio_rag' });
+  await c.connect();
+  if (dry) {
+    const d = (await c.query(`SELECT count(*) n FROM documents WHERE doc_id = ANY($1)`, [ids])).rows[0].n;
+    const a = (await c.query(`SELECT count(*) n FROM articles  WHERE doc_id = ANY($1)`, [ids])).rows[0].n;
+    console.log(`  [DRY] 기존 매칭 documents ${d} · articles ${a} → 이 doc_id들만 삭제 후 재삽입 예정(다른 공시 무영향)`);
+    await c.end(); return;
+  }
+  await c.query(SCHEMA);
+  await c.query(`CREATE TABLE IF NOT EXISTS article_hash (id bigint PRIMARY KEY, text_hash text NOT NULL)`);
+  await c.query(`CREATE TABLE IF NOT EXISTS embed_queue (text_hash text PRIMARY KEY, id bigint NOT NULL)`);
+  const runId = (await c.query(`INSERT INTO load_runs (script, mode, corpus) VALUES ('load_pg','delta',$1) RETURNING id`, [co])).rows[0].id;
+  const BY = 'load_pg@delta';
+  await c.query('BEGIN');
+  try {
+    await c.query(`DELETE FROM article_hash ah USING articles a WHERE ah.id=a.id AND a.doc_id = ANY($1)`, [ids]);
+    await c.query(`DELETE FROM articles  WHERE doc_id = ANY($1)`, [ids]);
+    await c.query(`DELETE FROM documents WHERE doc_id = ANY($1)`, [ids]);
+    for await (const d of jsonlLines(path.join(dir, `docs_${co}.jsonl`)))
+      if (d.inst_code) await c.query('INSERT INTO institutions (inst_code,inst_name,ministry) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [d.inst_code, d.inst_name, d.ministry]);
+    let nDocs = 0; { const cols = Array.from({ length: 11 }, () => []);
+      const flush = async () => { if (!cols[0].length) return;
+        await c.query(`INSERT INTO documents (doc_id,corpus,rel_path,inst_code,category,doc_title,doc_type,doc_date,n_articles,coverage,parse_status,created_by,load_run_id)
+          SELECT u.*, '${BY}'::text, ${runId}::bigint FROM unnest($1::text[],$2::text[],$3::text[],$4::text[],$5::text[],$6::text[],$7::text[],$8::text[],$9::int[],$10::real[],$11::text[]) AS u`, cols);
+        cols.forEach(a => a.length = 0); };
+      for await (const d of jsonlLines(path.join(dir, `docs_${co}.jsonl`))) {
+        [d.doc_id,d.corpus,d.rel_path,d.inst_code,d.category,d.doc_title,d.doc_type,d.doc_date,d.n_articles,d.coverage,d.parse_status].forEach((v,i)=>cols[i].push(v??null));
+        if (++nDocs % BATCH === 0) await flush(); }
+      await flush(); }
+    let nArts = 0; { const cols = Array.from({ length: 9 }, () => []);
+      const flush = async () => { if (!cols[0].length) return;
+        await c.query(`INSERT INTO articles (doc_id,seq,section,chapter,art_no,art_sub,title,body,n_chars,created_by,load_run_id)
+          SELECT u.*, '${BY}'::text, ${runId}::bigint FROM unnest($1::text[],$2::int[],$3::text[],$4::text[],$5::int[],$6::int[],$7::text[],$8::text[],$9::int[]) AS u`, cols);
+        cols.forEach(a => a.length = 0); };
+      for await (const a of jsonlLines(path.join(dir, `articles_${co}.jsonl`))) {
+        [a.doc_id,a.seq,a.section,a.chapter,a.art_no,a.art_sub,a.title,a.text,a.n_chars].forEach((v,i)=>cols[i].push(v??null));
+        if (++nArts % BATCH === 0) await flush(); }
+      await flush(); }
+    await c.query(`INSERT INTO article_hash (id, text_hash)
+      SELECT a.id, md5( (CASE WHEN a.title IS NOT NULL AND a.title<>'' THEN a.title||E'\n' ELSE '' END) || left(a.body,4000) )
+      FROM articles a WHERE a.doc_id = ANY($1) ON CONFLICT (id) DO NOTHING`, [ids]);
+    const eq = await c.query(`INSERT INTO embed_queue (text_hash, id)
+      SELECT DISTINCT ON (ah.text_hash) ah.text_hash, ah.id FROM article_hash ah JOIN articles a ON a.id=ah.id
+      WHERE a.doc_id = ANY($1) ON CONFLICT (text_hash) DO NOTHING`, [ids]);
+    await c.query('COMMIT');
+    await c.query('ANALYZE articles, documents');
+    await c.query(`UPDATE load_runs SET finished_at=now(), n_docs=$1, n_articles=$2 WHERE id=$3`, [nDocs, nArts, runId]);
+    console.log(`delta(${co}) 완료: documents ${nDocs} · articles ${nArts} · embed_queue 신규 ${eq.rowCount} (load_run ${runId})`);
+  } catch (e) { await c.query('ROLLBACK').catch(()=>{}); throw e; }
+  finally { await c.end(); }
+}
+
 async function main() {
   const appendIdx = process.argv.indexOf('--append');
   if (appendIdx >= 0) { await appendCorpus(process.argv[appendIdx + 1]); return; }
+  const deltaIdx = process.argv.indexOf('--delta');
+  if (deltaIdx >= 0) {
+    const si = process.argv.indexOf('--staging');
+    await appendCorpusDelta(process.argv[deltaIdx + 1], si >= 0 ? process.argv[si + 1] : undefined);
+    return;
+  }
 
   const env = loadEnv();
   const c = new Client({

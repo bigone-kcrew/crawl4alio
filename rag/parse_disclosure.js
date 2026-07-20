@@ -16,7 +16,7 @@ const path = require('path');
 const { once } = require('events');
 
 const ROOT = process.env.RAG_ROOT ? path.join(process.env.RAG_ROOT, '2_data') : path.join(__dirname, '..', '2_data');
-const OUT = path.join(ROOT, '_rag_staging');
+const OUT = process.argv.includes('--out') ? path.resolve(process.argv[process.argv.indexOf('--out') + 1]) : path.join(ROOT, '_rag_staging');
 const BASE = path.join(ROOT, 'alio-md', '자료', '기관별공시');
 
 const CHUNK_CAP = 120;          // 문서당 최대 청크(거대 OCR 덤프 방어). 정형 대형문서(표 많은 공고 등) 손실 방지 위해 40→120
@@ -28,12 +28,17 @@ const OVERLAP = 120;
 const args = process.argv.slice(2);
 const LIMIT = args.includes('--limit') ? parseInt(args[args.indexOf('--limit') + 1], 10) : 0;
 const SAMPLE = args.includes('--sample') ? parseInt(args[args.indexOf('--sample') + 1], 10) : 0;
+// 수시 델타용: --under <substr[,substr]> 부분 파싱(채용 서브트리만) · --since <ISO|epoch_ms> mtime 신규분만 · --out <dir> 별도 스테이징
+const UNDER = args.includes('--under') ? args[args.indexOf('--under') + 1].split(',').map(s => s.trim()).filter(Boolean) : null;
+const SINCE = args.includes('--since') ? (isNaN(+args[args.indexOf('--since') + 1]) ? Date.parse(args[args.indexOf('--since') + 1]) : +args[args.indexOf('--since') + 1]) : null;
 
-function* walk(dir) {
+function* walk(dir, depth = 0) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) yield* walk(p);
-    else yield p;
+    if (e.isDirectory()) {
+      if (UNDER && depth >= 1 && !UNDER.some(u => p.includes(u))) continue;  // --under 가지치기(전수 walk 방지)
+      yield* walk(p, depth + 1);
+    } else yield p;
   }
 }
 
@@ -249,6 +254,8 @@ async function main() {
 for (const abs of walk(BASE)) {
   if (!abs.endsWith('.md')) continue;
   if (abs.includes('단체협약')) { stat.skippedCa++; continue; }  // 이미 ca 코퍼스
+  if (UNDER && !UNDER.some(u => abs.includes(u))) continue;      // 부분 파싱(--under)
+  if (SINCE) { let st; try { st = fs.statSync(abs); } catch { continue; } if (st.mtimeMs <= SINCE) continue; }  // 델타(--since)
   seen++;
   if (LIMIT && seen > LIMIT) break;
 

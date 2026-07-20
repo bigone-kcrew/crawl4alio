@@ -1,0 +1,224 @@
+{
+  "name": "ALIO 증분승인 v1",
+  "nodes": [
+    {
+      "id": "tt",
+      "name": "ANDY 콜백",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "e399823d-8c8c-4553-b9dc-91b16b5f854b"
+    },
+    {
+      "id": "c",
+      "name": "파싱·인가(alio:만)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const q=$json.callback_query||$json;const data=String(q.data||\"\");const chatId=(q.message&&q.message.chat&&q.message.chat.id)||(q.from&&q.from.id)||\"\";const cbId=q.id||\"\";if(!data.startsWith(\"alio:\"))return [];if(String(chatId)!==\"<TELEGRAM_CHAT_ID>\")return [];const [,action,track]=data.split(\":\");return [{json:{action,track,chatId:String(chatId),cbId}}];"
+      }
+    },
+    {
+      "id": "ack",
+      "name": "스피너 해제",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        -140
+      ],
+      "parameters": {
+        "resource": "callback",
+        "operation": "answerQuery",
+        "queryId": "={{$json.cbId}}",
+        "additionalFields": {
+          "text": "처리 중..."
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "56dcf9c4-dc7e-4de6-a89d-b5096daa18fd"
+    },
+    {
+      "id": "f",
+      "name": "승인?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        40
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{$json.action}}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ap",
+      "name": "수집 실행(apply)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        -20
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://<PIPELINE_HOST>:8092/periodic/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({track:$json.track,apply:true}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "<CRED_ID>",
+          "name": "ALIO Pipeline Token"
+        }
+      }
+    },
+    {
+      "id": "n1",
+      "name": "시작 알림",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        -20
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=[ALIO] 🚀 수집 시작: {{$json.track}} (완료 시 통지)",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "53cf4df1-f692-43cf-ad6f-690eeda42e9d"
+    },
+    {
+      "id": "n2",
+      "name": "건너뜀 알림",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        740,
+        140
+      ],
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=[ALIO] ⏭ 건너뜀: {{$json.track}}",
+        "additionalFields": {}
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "<CRED_ID>",
+          "name": "ANDY"
+        }
+      },
+      "webhookId": "52a48418-758a-4cb0-a58d-0b3e0d4423b5"
+    }
+  ],
+  "connections": {
+    "ANDY 콜백": {
+      "main": [
+        [
+          {
+            "node": "파싱·인가(alio:만)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "파싱·인가(alio:만)": {
+      "main": [
+        [
+          {
+            "node": "스피너 해제",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "승인?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "승인?": {
+      "main": [
+        [
+          {
+            "node": "수집 실행(apply)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "건너뜀 알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "수집 실행(apply)": {
+      "main": [
+        [
+          {
+            "node": "시작 알림",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

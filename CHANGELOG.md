@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.6] - 2026-07-20
+
+### Added
+- **수시 델타 적재** (`rag/parse_disclosure.js` + `rag/load_pg.js`): 수시 증분(채용 등)을 전체 재파싱 없이 **신규+변경분만** RAG에 편입.
+  - `parse_disclosure.js`: `--under <substr[,substr]>`(부분 파싱 — 경로 토큰 매칭 + walk 가지치기로 대형 트리 전수 순회 방지), `--since <ISO|epoch_ms>`(mtime 기준 신규/재변환분만 — OCR 개선분도 포착), `--out <dir>`(별도 스테이징).
+  - `load_pg.js --delta <corpus> [--staging <dir>]`: 스테이징에 있는 **doc_id만 정확히 삭제→재삽입**(접두 검증·BEGIN/COMMIT 원자적·`--dry-run`) + 신규 해시만 embed_queue. `--append`(코퍼스 전체 교체)와 달리 범위 한정이라 수시 증분에 적합.
+- **`convert_ocr_needed.js --merge-ckpt <path>`**: 듀얼 OCR 워커 샤드(`--skip-main-merge`) 완료 후 각 체크포인트를 메인에 병합하는 standalone 모드.
+- **n8n 증분 자동화 (`n8n/`)**: 감지→텔레그램 알림·버튼 승인→수집·적재→완료통지 워크플로 4종(정기감지·수시감지·증분승인·완료통지, **새니타이즈**=개인정보·크리덴셜ID·호스트명 플레이스홀더화) + `periodic_server.js`(HTTP 래퍼) + `README.md`(설정·크론 timezone·메시지 규칙).
+
 ## [1.9.5] - 2026-07-20
 
 ### Changed
