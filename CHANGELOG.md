@@ -2,6 +2,15 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.10] - 2026-07-22
+
+### Added
+- **MCP 등록 안내 확충** (`rag/README.md`, `rag/mcp_server.js` 헤더): Claude Code(user 스코프)·**Codex** 등록법과, Codex 필수 설정 `default_tools_approval_mode = "approve"`(없으면 `approval=never`+read-only에서 `user cancelled MCP tool call`로 즉시 취소되는 함정) 명시. 등록 후 세션 시작 시 자동 로드·세션 내 재사용(질의마다 재스폰 아님) 설명 추가.
+- **집계형 질문 힌트**: `search_corpus` description과 README에 "개수/전수 질문은 `body=true`·넉넉한 `limit`으로 검색하고 조문 수와 고유 문서 수(`doc_id`)를 구분해 집계" 가이드 추가(기본 `body=false` 제목검색의 과소집계 방지).
+
+### Fixed
+- `rag/mcp_server.js` 헤더 주석의 내부 절대경로를 `<repo>` 제네릭으로 새니타이즈.
+
 ## [1.9.9] - 2026-07-21
 
 ### Changed

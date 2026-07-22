@@ -11,7 +11,10 @@
  *   get_document   문서 메타 + 조문 목록 (doc_id)
  *   get_article    특정 조문 전문 (doc_id, art_no[, art_sub])
  *
- * 등록(Claude Code): claude mcp add alio-rag -- node /workspace/alio/3_rag/mcp_server.js
+ * 등록(Claude Code): claude mcp add -s user alio-rag -- node <repo>/rag/mcp_server.js
+ * 등록(Codex):       codex mcp add alio-rag -- node <repo>/rag/mcp_server.js
+ *   + ~/.codex/config.toml의 [mcp_servers.alio-rag]에 default_tools_approval_mode = "approve"
+ *     (없으면 approval=never·read-only에서 "user cancelled MCP tool call"로 즉시 취소됨)
  * DB 접속: .env.api (api_server와 동일). 의미검색은 NVIDIA_API_KEY 필요(없으면 키워드만).
  */
 'use strict';
@@ -173,7 +176,9 @@ const TOOLS = [
   {
     name: 'search_corpus',
     description: '한국 공공기관 노동 문서(법령 legal·기관내규 bylaws·단체협약 ca·경영공시 disclosure) 조항 검색. ' +
-      'semantic=true면 의미검색(키워드가 조문에 없어도 검색), 기본은 trigram 키워드 검색(3자 이상 권장).',
+      'semantic=true면 의미검색(키워드가 조문에 없어도 검색), 기본은 trigram 키워드 검색(3자 이상 권장). ' +
+      '개수/전수 집계형 질문("몇 개"·목록화)에는 반드시 body=true(제목만 보면 누락)로 검색하고 limit을 넉넉히 둘 것. ' +
+      '집계 시 "조문 수"와 "고유 문서 수"는 다르니 rows의 doc_id로 문서 단위를 따로 세어 구분해 답할 것.',
     inputSchema: {
       type: 'object',
       properties: {
