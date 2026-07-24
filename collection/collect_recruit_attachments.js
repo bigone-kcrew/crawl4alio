@@ -38,6 +38,16 @@ const POSTING_CONCURRENCY = Number(process.env.RECRUIT_POSTING_CONCURRENCY || 6)
 // alio.go.kr 전역 동시요청 상한 — 게시글×파일 중첩 곱셈을 막는 실제 부하 캡.
 // 상세조회·파일다운로드가 이 세마포어를 공유. 429/403은 관측된 적 없으나 정부서버 예의로 상한 유지.
 const ALIO_CONCURRENCY = Number(process.env.RECRUIT_ALIO_CONCURRENCY || 6);
+// 기관(institution) 동시 처리 수 — 기존 순차 루프를 병렬화. 상세조회·파일다운로드는
+// 전역 alioSem(ALIO_CONCURRENCY)이 여전히 캡하므로 이 값을 올려도 무거운 요청 부하는
+// 늘지 않는다. 순차로 낭비되던 목록조회(itemReportListSusi) 지연이 겹쳐지며 다운로드
+// 세마포어가 포화 상태로 유지되는 것이 이득. 목록조회만 최대 이 값만큼 동시 실행.
+const INSTITUTION_CONCURRENCY = Number(process.env.RECRUIT_INSTITUTION_CONCURRENCY || 4);
+// 스트림 다운로드 무응답(idle) 상한(ms). axios의 timeout은 응답 헤더 수신까지만 적용되어
+// 스트리밍 본문이 중간에 정체되면 잡지 못하고 세마포어 슬롯이 영구 점유될 수 있다
+// (관측된 장기 정체의 유력 원인). 이 시간 동안 데이터가 전혀 오지 않으면 스트림을
+// 강제 종료해 슬롯을 회수하고 오류로 처리한다.
+const STREAM_IDLE_MS = Number(process.env.RECRUIT_STREAM_IDLE_MS || 60000);
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
 
 // 공시코드별 설정: 상세페이지 URL 경로, 기본 tableName, idxName
@@ -238,12 +248,29 @@ async function downloadFile(fileNo, destPath) {
             maxContentLength: 500 * 1024 * 1024
         });
         const writer = fs.createWriteStream(destPath);
-        await new Promise((resolve, reject) => {
-            res.data.on('error', reject);
-            writer.on('error', reject);
-            writer.on('finish', resolve);
-            res.data.pipe(writer);
-        });
+        try {
+            await new Promise((resolve, reject) => {
+                let idleTimer;
+                const clearIdle = () => { if (idleTimer) clearTimeout(idleTimer); };
+                const armIdle = () => {
+                    clearIdle();
+                    idleTimer = setTimeout(() => {
+                        res.data.destroy(new Error(`stream idle > ${STREAM_IDLE_MS}ms`));
+                    }, STREAM_IDLE_MS);
+                };
+                res.data.on('data', armIdle);
+                res.data.on('error', (err) => { clearIdle(); reject(err); });
+                writer.on('error', (err) => { clearIdle(); reject(err); });
+                writer.on('finish', () => { clearIdle(); resolve(); });
+                armIdle();
+                res.data.pipe(writer);
+            });
+        } catch (err) {
+            // 정체/오류 시 슬롯 회수 + 부분 파일 제거(신규 다운로드 경로가 부분파일을 남기지 않도록)
+            writer.destroy();
+            try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (_) {}
+            throw err;
+        }
         return fs.statSync(destPath).size;
     });
 }
@@ -460,11 +487,19 @@ async function main() {
     const ckpt = loadCkpt();
     const totals = { postings: 0, skipped: 0, files: 0, bytes: 0, errors: 0 };
 
-    for (const inst of institutions) {
-        for (const formNo of args.forms) {
-            await processForm(inst, formNo, args, cutoffYear, ckpt, totals);
+    // 기관 단위 병렬화(INSTITUTION_CONCURRENCY). 상세조회·다운로드는 전역 alioSem이 캡하므로
+    // 무거운 요청 부하는 그대로 두고, 순차로 낭비되던 목록조회 지연만 겹쳐 처리량을 끌어올린다.
+    // 한 기관의 예기치 못한 오류가 다른 기관 처리를 중단시키지 않도록 개별 격리.
+    await runPool(institutions, INSTITUTION_CONCURRENCY, async (inst) => {
+        try {
+            for (const formNo of args.forms) {
+                await processForm(inst, formNo, args, cutoffYear, ckpt, totals);
+            }
+        } catch (err) {
+            logger.error(`${inst.name}: 기관 처리 실패 — ${err.message}`);
+            totals.errors += 1;
         }
-    }
+    });
 
     logger.info(`완료: 게시글 ${totals.postings}건 처리 (스킵 ${totals.skipped}) / 파일 ${totals.files}건 ${(totals.bytes / 1e6).toFixed(1)}MB / 오류 ${totals.errors}건`);
 }

@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.13] - 2026-07-24
+
+### Changed
+- **채용 첨부 수집 속도개선** (`collection/collect_recruit_attachments.js`): **기관 단위 병렬화**(`runPool`, `RECRUIT_INSTITUTION_CONCURRENCY` 기본 4) — 상세조회·다운로드는 여전히 전역 세마포어(6)가 캡하므로 서버 부하는 불변, 순차로 낭비되던 목록조회(710회) 지연만 겹쳐 대폭 단축. **스트림 idle 타임아웃**(`RECRUIT_STREAM_IDLE_MS` 기본 60s) — axios timeout이 못 잡는 본문 정체 시 슬롯 회수·부분파일 삭제로 파이프라인 정지 방지. 미지정 확장자 기본 라우팅 잔재(`['markitdown']`→`['kordoc']`) 정리. dedup/체크포인트/매니페스트 포맷 불변.
+
 ## [1.9.12] - 2026-07-24
 
 ### Changed
