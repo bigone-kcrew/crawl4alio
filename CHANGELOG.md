@@ -2,6 +2,11 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.14] - 2026-07-24
+
+### Added
+- **periodic_server `publish` 파라미터**(`n8n/periodic_server.js`): `POST /periodic/run`에 `publish`(apply와 함께만) 추가 → `run_periodic.sh`에 `--publish` 전달. `publish=true` 시 수집·적재 후 build_web 표출 재빌드+배포(**옵트인, 기본 off** → 미지정 시 현 동작 무변경). 표출 재빌드 로직은 운영측 run_periodic.sh(build_web.js 오케스트레이터)에 있고 n8n은 트리거만(원칙 준수).
+
 ## [1.9.13] - 2026-07-24
 
 ### Changed

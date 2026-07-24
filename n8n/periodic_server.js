@@ -5,7 +5,8 @@
  *
  *   GET  /health                         → {ok, running}
  *   GET  /periodic/status[?track=]       → 최신 summary.json 디제스트(들)   (토큰 필요)
- *   POST /periodic/run {track, apply}    → run_periodic.sh 실행             (토큰 필요)
+ *   POST /periodic/run {track, apply, publish}  → run_periodic.sh 실행       (토큰 필요)
+ *       publish=true(apply와 함께): 수집·적재 후 build_web 표출 재빌드+배포(--publish). 기본 off.
  *       detect/recruit(감지) 등은 동기 응답(디제스트), apply=true(장기)는 202 즉시 응답 후 백그라운드.
  *
  * 인증: 헤더 X-Pipe-Token == env PIPELINE_TOKEN. (apply는 반드시 토큰 게이트 — n8n만 호출)
@@ -36,11 +37,12 @@ function postDone(out) {
   } catch {}
 }
 
-function runTrack(track, apply) {
+function runTrack(track, apply, publish) {
   return new Promise(resolve => {
-    running = { track, apply, since: new Date().toISOString() };
+    running = { track, apply, publish, since: new Date().toISOString() };
     const args = [`${ALIO}/1_collection/run_periodic.sh`, track];
     if (apply) args.push('--apply');
+    if (publish) args.push('--publish');   // 표출 재빌드+배포(build_web) — apply와 함께만. 로직은 run_periodic.sh.
     const p = spawn('bash', args, { cwd: ALIO, env: process.env });
     let tail = '';
     const cap = d => { tail = (tail + d).slice(-2000); };
@@ -70,11 +72,11 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && u.pathname === '/periodic/run') {
     let body = ''; req.on('data', c => body += c); await new Promise(r => req.on('end', r));
     let j = {}; try { j = JSON.parse(body || '{}'); } catch {}
-    const track = j.track, apply = !!j.apply;
+    const track = j.track, apply = !!j.apply, publish = !!j.publish;
     if (!TRACKS.includes(track)) return send(res, 400, { ok: false, error: 'track must be one of ' + TRACKS.join('|') });
     if (running) return send(res, 409, { ok: false, error: 'busy', running });
-    if (apply) { runTrack(track, true); return send(res, 202, { ok: true, started: true, track, apply: true }); }
-    const out = await runTrack(track, false);   // 감지류는 빠르니 동기 응답
+    if (apply) { runTrack(track, true, publish); return send(res, 202, { ok: true, started: true, track, apply: true, publish }); }
+    const out = await runTrack(track, false, false);   // 감지류는 빠르니 동기 응답(publish는 apply에서만)
     return send(res, 200, out);
   }
 
