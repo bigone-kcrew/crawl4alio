@@ -27,7 +27,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const b=$json.body||$json;const ok=b.ok;const track=b.track||\"?\";const exit=b.exit;const dg=b.digest||{};const tail=String(b.tail||\"\").slice(-500);const msg=ok?`[ALIO] \\u2705 ${track} 완료 \\u2014 실패 ${dg.failed??\"?\"}\\u00b7OCR ${dg.ocr_needed??\"?\"}\\u00b7신규 ${dg.missing??\"?\"}`:`[ALIO] \\u26a0\\ufe0f ${track} 실패 (exit ${exit})\\n${tail}`;return [{json:{msg}}];"
+        "jsCode": "const b=$json.body||$json;const ok=b.ok;const track=b.track||\"?\";const exit=b.exit;const dg=b.digest||{};const tail=String(b.tail||\"\").slice(-500);\nconst re=(dg.run_errors||0)>0?` · ⚠오류 ${dg.run_errors}건`:``;\nconst msg=ok?`[ALIO] ✅ ${track} 완료 — 신규 ${dg.missing??\"?\"}·OCR대기 ${dg.ocr_needed??\"?\"}${re} (누적변환실패 ${dg.failed??\"?\"}, 참고)`:`[ALIO] ⚠️ ${track} 실패 (exit ${exit})\\n${tail}`;\nreturn [{json:{msg}}];"
       }
     },
     {

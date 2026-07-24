@@ -117,7 +117,7 @@
       ],
       "parameters": {
         "chatId": "<TELEGRAM_CHAT_ID>",
-        "text": "=[ALIO] 🔔 정기공시 증분 감지 - 신규 {{$json.digest.missing}}건 (실패 {{$json.digest.failed}} / OCR {{$json.digest.ocr_needed}})\n{{ ($json.digest.items||[]).slice(0,10).map(i=>`• [${i.code}] ${i.inst} - ${i.title}`).join(String.fromCharCode(10)) }}{{ $json.digest.ocr_needed>0 ? String.fromCharCode(10)+\"⚠ 미OCR 스캔본 \"+$json.digest.ocr_needed+\"건 — 정기 재적재 시 OCR 워커 가동 권장\" : \"\" }}\n\n수집 승인?",
+        "text": "=[ALIO] 🔔 정기공시 증분 감지 — 신규 {{$json.digest.missing}}건{{ ($json.digest.run_errors||0)>0 ? \" · ⚠오류 \"+$json.digest.run_errors+\"건\" : \"\" }}\n{{ ($json.digest.items||[]).slice(0,10).map(i=>`• [${i.code}] ${i.inst} - ${i.title}`).join(String.fromCharCode(10)) }}{{ $json.digest.ocr_needed>0 ? String.fromCharCode(10)+\"⚠ 미OCR 스캔본 \"+$json.digest.ocr_needed+\"건 — 정기 재적재 시 OCR 워커 가동 권장\" : \"\" }}{{ ($json.digest.run_errors||0)>0 ? String.fromCharCode(10)+\"⚠ 이번 실행 오류 \"+$json.digest.run_errors+\"건 — 로그 확인 필요\" : \"\" }}\nℹ 코퍼스 누적 변환실패 {{$json.digest.failed}}건(대부분 DRM·미지원·참고, 이번 감지와 무관)\n\n수집 승인?",
         "additionalFields": {},
         "replyMarkup": "inlineKeyboard",
         "inlineKeyboard": {
