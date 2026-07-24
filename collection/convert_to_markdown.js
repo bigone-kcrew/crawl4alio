@@ -2,7 +2,7 @@
 /**
  * ALIO Markdown Converter
  *
- * download_files_index.json의 파일을 kordoc → markitdown 순으로 변환.
+ * download_files_index.json의 파일을 kordoc로 변환(pptx만 markitdown — kordoc 미지원).
  * 변환 불가(스캔 PDF 등)는 ocr_needed로 분리하고 나머지를 계속 처리.
  *
  * Usage:
@@ -70,15 +70,15 @@ async function pdfPageCount(absPath) {
 
 // ── Parser 라우팅 ───────────────────────────────────────────────────────────────
 // kordoc 지원: hwp3/hwp/hwpx/hwpml, pdf, xls/xlsx, docx (npm 내장 or HTTP)
-// markitdown은 xlsx/xls/pptx 전용 — **pdf는 markitdown 미사용**(스캔에서 hang). pdf·hwp는 kordoc 실패 시 PaddleOCR(ocr_needed)로 직행
+// markitdown은 **pptx 전용**(kordoc 미지원). 그 외 hwp/hwpx/pdf/docx/xls/xlsx는 모두 kordoc(실패 시 PaddleOCR/ocr_needed로 직행). pdf는 markitdown 미사용(스캔 hang).
 const ROUTING = {
   hwp:   ['kordoc'],
   hwpx:  ['kordoc'],
   hwpml: ['kordoc'],
   pdf:   ['kordoc'],
-  xlsx:  ['kordoc', 'markitdown'],
+  xlsx:  ['kordoc'],
   docx:  ['kordoc'],
-  xls:   ['kordoc', 'markitdown'],
+  xls:   ['kordoc'],
   pptx:  ['markitdown'],
 };
 const CONVERTIBLE = new Set(Object.keys(ROUTING));

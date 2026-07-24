@@ -41,15 +41,15 @@ const ALL_FILES     = process.argv.includes('--all-files'); // 첨부 전체(과
 const SINGLE_APBA   = process.argv.includes('--apba-id')
   ? process.argv[process.argv.indexOf('--apba-id') + 1] : null;
 
-// 변환 라우팅
+// 변환 라우팅 — markitdown은 pptx 전용(kordoc 미지원). 그 외는 모두 kordoc.
 const ROUTING = {
-  hwp:  ['kordoc', 'markitdown'],
-  hwpx: ['kordoc', 'markitdown'],
-  hwpml:['kordoc', 'markitdown'],
-  pdf:  ['kordoc', 'markitdown'],
-  docx: ['kordoc', 'markitdown'],
-  xlsx: ['kordoc', 'markitdown'],
-  xls:  ['markitdown'],
+  hwp:  ['kordoc'],
+  hwpx: ['kordoc'],
+  hwpml:['kordoc'],
+  pdf:  ['kordoc'],
+  docx: ['kordoc'],
+  xlsx: ['kordoc'],
+  xls:  ['kordoc'],
   pptx: ['markitdown'],
 };
 
@@ -164,7 +164,7 @@ async function callParser(parserName, filePath, filename) {
 }
 
 async function convertToMd(rawPath, ext) {
-  const parserNames = ROUTING[ext] || ['markitdown'];
+  const parserNames = ROUTING[ext] || ['kordoc'];
   const filename = path.basename(rawPath);
 
   for (const parser of parserNames) {

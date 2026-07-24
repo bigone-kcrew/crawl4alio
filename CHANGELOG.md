@@ -2,6 +2,12 @@
 
 이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따르고, 버전은 [유의적 버전](https://semver.org/lang/ko/)에 준합니다.
 
+## [1.9.11] - 2026-07-24
+
+### Changed
+- **변환 라우팅에서 markitdown 폴백 제거(잔재 정리)**: `collection/convert_to_markdown.js`·`collection/collect_institution_bylaws.js`의 ROUTING에서 hwp/hwpx/hwpml/pdf/docx/xls/xlsx의 markitdown 폴백을 모두 제거 → **kordoc 단독**(실패 시 PaddleOCR/ocr_needed로 직행). kordoc가 XLS/XLSX 포함 대부분 처리하므로 markitdown은 사실상 불필요. **pptx만 markitdown 유지**(kordoc 미지원). 미지정 확장자 기본값도 `['markitdown']`→`['kordoc']`. `parsers.js`의 `callMarkitdown`은 pptx용으로 존치.
+- 부수효과: kordoc 실패분이 미설정 markitdown 폴백으로 새며 남기던 `MARKITDOWN_PARSE_URL 미설정 — 폴백 건너뜀` 스퓨리어스 변환실패 유형이 사라짐(kordoc 성공 또는 OCR로 정직하게 분류).
+
 ## [1.9.10] - 2026-07-22
 
 ### Added
